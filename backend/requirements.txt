@@ -1,6 +1,7 @@
-fastapi
-uvicorn[standard]
-sqlalchemy
-pydantic
-httpx
-pytest
+# Testado com Python 3.11 (instalação limpa verificada em 2026-08-21).
+fastapi>=0.141,<1
+uvicorn[standard]>=0.52,<1
+sqlalchemy>=2.0,<3
+pydantic>=2.13,<3
+httpx>=0.28,<1
+pytest>=9,<10
