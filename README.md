@@ -18,6 +18,8 @@ Página de análise da curva de juros brasileira (DI futuro — DI1/B3), MVP apr
 - Node.js 20+ e npm
 - SSH acessível a partir do seu PC
 
+`backend/requirements.txt` está pinado por faixa de versão e validado contra instalação limpa em Python 3.11 (FastAPI, Uvicorn, SQLAlchemy, Pydantic, httpx, pytest). `.venv`, `node_modules`, `dist/` e o banco SQLite (`*.db`) não são versionados no Git.
+
 ## Rodar localmente na VPS
 
 ### Backend
