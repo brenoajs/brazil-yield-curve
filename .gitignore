@@ -1,0 +1,20 @@
+# Python
+backend/.venv/
+backend/__pycache__/
+backend/.pytest_cache/
+backend/*.db
+*.py[cod]
+
+# Node/Vite
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/coverage/
+frontend/*.tsbuildinfo
+
+# Environment and local files
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store

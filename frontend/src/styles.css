@@ -1,0 +1,25 @@
+:root {
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color: #111827;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: #f9fafb; }
+.container { max-width: 960px; margin: 0 auto; padding: 16px; }
+h1 { font-size: 1.3rem; }
+h2 { font-size: 1.05rem; }
+.muted { color: #6b7280; font-size: 0.85rem; }
+.panel { background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 14px; margin: 12px 0; }
+.panels-row { display: flex; gap: 12px; flex-wrap: wrap; }
+.card { flex: 1 1 240px; }
+.controls { display: flex; gap: 12px; align-items: center; margin: 10px 0; }
+.btn { background: #2563eb; color: #fff; padding: 6px 12px; border-radius: 6px; text-decoration: none; font-size: 0.9rem; }
+.points-table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; }
+.points-table th, .points-table td { padding: 8px 10px; border-bottom: 1px solid #f3f4f6; text-align: left; font-size: 0.9rem; }
+.up { color: #dc2626; }   /* alta de taxa = vermelho (preço cai) */
+.down { color: #16a34a; }
+.error-box, .empty-box { background: #fef2f2; border: 1px solid #fecaca; padding: 16px; border-radius: 10px; }
+.empty-box { background: #fffbeb; border-color: #fde68a; }
+.stale-banner { background: #fffbeb; border: 1px solid #fde68a; padding: 8px 12px; border-radius: 8px; margin: 8px 0; font-size: 0.9rem; }
+.skeleton .sk-line { height: 14px; background: #e5e7eb; border-radius: 6px; margin: 10px 0; }
+.skeleton .sk-chart { height: 300px; background: #eef2f7; border-radius: 10px; margin: 12px 0; }
+.macro-list { list-style: none; padding: 0; display: flex; gap: 18px; flex-wrap: wrap; }
