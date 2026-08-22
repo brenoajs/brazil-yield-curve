@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { api, Curve, Compare, Macro, MACRO_LABELS } from './api'
+import { api, Curve, Compare } from './api'
+import Header from './Header'
+import Hero from './Hero'
+import KpiStrip from './KpiStrip'
 import CurveChart from './CurveChart'
 import Panels from './Panels'
-
-const PCT = (r: number) => `${(r * 100).toFixed(2)}%`.replace('.', ',')
+import VerticesTable from './VerticesTable'
 
 function Skeleton() {
   return (
@@ -19,7 +21,6 @@ function Skeleton() {
 
 export default function App() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
-  const [staleNotice, setStaleNotice] = useState<string | null>(null)
 
   const datesQ = useQuery({ queryKey: ['dates'], queryFn: () => api.dates() })
   const curveQ = useQuery({
@@ -36,16 +37,22 @@ export default function App() {
 
   const curve: Curve | undefined = curveQ.data
   const compare: Compare | undefined = compareQ.data
-  const macro: Macro | undefined = macroQ.data
+  const macro = macroQ.data
 
   if (curveQ.isLoading) return <Skeleton />
 
   if (curveQ.isError) {
     const env = (curveQ.error as { envelope?: { error?: string } }).envelope
     return (
-      <div className="container">
-        <h1>Brazil Yield Curve</h1>
+      <div>
+        <Header
+          dates={datesQ.data?.dates ?? []}
+          selectedDate={undefined}
+          onDateChange={setSelectedDate}
+          csvHref={api.exportCsvUrl(undefined)}
+        />
         <div className="error-box" data-testid="error-state">
+          <h1>Curva DI</h1>
           <p>
             Falha ao carregar a curva
             {env?.error === 'no_data' ? ' — nenhum pregão disponível ainda.' : '.'}
@@ -58,9 +65,15 @@ export default function App() {
 
   if (curve && curve.points.length === 0) {
     return (
-      <div className="container">
-        <h1>Brazil Yield Curve</h1>
+      <div>
+        <Header
+          dates={datesQ.data?.dates ?? []}
+          selectedDate={curve.trade_date}
+          onDateChange={setSelectedDate}
+          csvHref={api.exportCsvUrl(curve.trade_date)}
+        />
         <div className="empty-box" data-testid="empty-state">
+          <h1>Curva DI</h1>
           <p>Sem pontos para este pregão.</p>
           <button onClick={() => setSelectedDate(null)}>Ver último pregão</button>
         </div>
@@ -68,86 +81,37 @@ export default function App() {
     )
   }
 
-  const isStale = curveQ.isFetching && !curveQ.isLoading
-  if (isStale && !staleNotice) setStaleNotice('Atualizando… exibindo último dado válido.')
-
   return (
-    <div className="container">
-      <h1>Brazil Yield Curve — DI futuro (DI1)</h1>
+    <div>
+      <Header
+        dates={datesQ.data?.dates ?? []}
+        selectedDate={curve?.trade_date}
+        onDateChange={setSelectedDate}
+        csvHref={api.exportCsvUrl(curve?.trade_date)}
+      />
 
-      {staleNotice && (
-        <div className="stale-banner" data-testid="stale-banner">
-          {staleNotice}
-        </div>
-      )}
+      <main className="page">
+        {curve && compare && <Hero curve={curve} compare={compare} />}
 
-      <div className="controls">
-        <label>
-          Pregão:{' '}
-          <select
-            value={curve?.trade_date ?? ''}
-            onChange={(e) => setSelectedDate(e.target.value)}
-          >
-            {(datesQ.data?.dates ?? []).map((d) => (
-              <option key={d} value={d}>
-                {d}
-              </option>
-            ))}
-          </select>
-        </label>
-        <a className="btn" href={api.exportCsvUrl(curve?.trade_date)} download>
-          Exportar CSV
-        </a>
-      </div>
+        {curveQ.isFetching && !curveQ.isLoading && (
+          <div className="stale-banner" data-testid="stale-banner">
+            Atualizando… exibindo último dado válido.
+          </div>
+        )}
 
-      {curve && <CurveChart curve={curve} />}
+        <KpiStrip macro={macro} />
 
-      <Panels compare={compare} curve={curve} />
+        {curve && (
+          <div className="content-grid">
+            <CurveChart curve={curve} />
+            <Panels compare={compare} curve={curve} />
+          </div>
+        )}
 
-      {macro && (
-        <section className="panel">
-          <h2>Contexto macro ({macro.ref_date})</h2>
-          <ul className="macro-list">
-            {Object.entries(macro.indicators).map(([code, value]) => (
-              <li key={code}>
-                {MACRO_LABELS[code] ?? code}: <strong>{String(value).replace('.', ',')}</strong>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+        {curve && <VerticesTable curve={curve} compare={compare} />}
 
-      {curve && (
-        <table className="points-table" data-testid="points-table">
-          <thead>
-            <tr>
-              <th>Vértice</th>
-              <th>Vencimento</th>
-              <th>Taxa</th>
-              <th>Tipo</th>
-              <th>Δ pb (vs pregão ant.)</th>
-              <th>Liquidez</th>
-            </tr>
-          </thead>
-          <tbody>
-            {curve.points.map((p) => {
-              const d = compare?.deltas.find((x) => x.vertex_label === p.vertex_label)
-              return (
-                <tr key={p.vertex_label}>
-                  <td>{p.vertex_label}</td>
-                  <td>{p.maturity_date}</td>
-                  <td>{PCT(p.rate)}</td>
-                  <td>{p.interpolated ? 'interpolado' : 'real'}</td>
-                  <td className={(d?.delta_pb ?? 0) >= 0 ? 'up' : 'down'}>
-                    {d?.delta_pb != null ? `${d.delta_pb > 0 ? '+' : ''}${d.delta_pb}` : '—'}
-                  </td>
-                  <td>{p.liquidity_note ?? '—'}</td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      )}
+        <p className="footnote">Taxas anualizadas em base 252 dias úteis. Alta de taxa em laranja, queda em verde.</p>
+      </main>
     </div>
   )
 }

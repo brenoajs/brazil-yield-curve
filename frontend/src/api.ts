@@ -37,10 +37,10 @@ export interface Macro {
 }
 
 export const MACRO_LABELS: Record<string, string> = {
-  '432': 'IPCA 12m (%)',
-  '12': 'Selic (%)',
-  '13522': 'USD/BRL (PTAX)',
-  '1': 'Selic alvo (%)',
+  '432': 'Selic meta (%)',
+  '1178': 'Selic efetiva (% a.a.)',
+  '13522': 'IPCA 12m (%)',
+  '1': 'USD/BRL (PTAX)',
 }
 
 export class ApiError extends Error {
