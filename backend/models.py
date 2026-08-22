@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import datetime as dt
 
-from sqlalchemy import Date, DateTime, Float, Integer, String, UniqueConstraint, create_engine
+from sqlalchemy import Date, DateTime, Float, ForeignKey, Integer, String, UniqueConstraint, create_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
 
@@ -17,14 +17,14 @@ class CurveSnapshot(Base):
     trade_date: Mapped[dt.date] = mapped_column(Date, index=True)
     curve_type: Mapped[str] = mapped_column(String(32), index=True)  # DI_FUTURE | NOMINAL | REAL | IMPLICIT
     source: Mapped[str] = mapped_column(String(64), default="mock")
-    ingested_at: Mapped[dt.datetime] = mapped_column(DateTime, default=dt.datetime.utcnow)
+    ingested_at: Mapped[dt.datetime] = mapped_column(DateTime, default=lambda: dt.datetime.now(dt.UTC))
     __table_args__ = (UniqueConstraint("trade_date", "curve_type", name="uq_date_curve"),)
 
 
 class CurvePoint(Base):
     __tablename__ = "curve_points"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    snapshot_id: Mapped[int] = mapped_column(Integer, index=True)
+    snapshot_id: Mapped[int] = mapped_column(ForeignKey("curve_snapshots.id", ondelete="CASCADE"), index=True)
     vertex_label: Mapped[str] = mapped_column(String(8))  # 3m, 6m, 1a ...
     maturity_date: Mapped[dt.date] = mapped_column(Date)
     rate: Mapped[float] = mapped_column(Float)  # decimal anualizado base 252
@@ -38,6 +38,7 @@ class MacroIndicator(Base):
     indicator_code: Mapped[str] = mapped_column(String(16), index=True)  # SGS 432, 12, 13522, 1
     ref_date: Mapped[dt.date] = mapped_column(Date)
     value: Mapped[float] = mapped_column(Float)
+    __table_args__ = (UniqueConstraint("indicator_code", "ref_date", name="uq_indicator_refdate"),)
 
 
 def make_engine(db_url: str = "sqlite:///./byc.db"):

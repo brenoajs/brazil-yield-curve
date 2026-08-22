@@ -2,25 +2,28 @@
 from __future__ import annotations
 
 import datetime as dt
+import json
+import zipfile
+from pathlib import Path
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
-import api_main
-import ingestor
-from conventions import delta_pb, discount_factor, forward_rate, interpolate_linear, year_fraction
-from models import make_engine, make_session_factory
+from api_main import create_app
+from conventions import delta_pb, discount_factor, forward_rate, interpolate_linear, is_business_day, year_fraction
+from ingestor import seed_history
+from models import init_db, make_engine, make_session_factory
 
 
 @pytest.fixture()
-def client(tmp_path, monkeypatch):
-    engine = make_engine(f"sqlite:///{tmp_path}/byc.db")
-    api_main.init_db(engine)
-    monkeypatch.setattr(api_main, "engine", engine)
-    monkeypatch.setattr(api_main, "SessionLocal", make_session_factory(engine))
+def client(tmp_path):
+    db_url = f"sqlite:///{tmp_path}/byc.db"
+    engine = make_engine(db_url)
+    init_db(engine)
     with make_session_factory(engine)() as session:
-        ingestor.seed_history(session, days=5)
-    from api_main import app
+        seed_history(session, days=5, source="mock")
+    app = create_app(db_url)
     return TestClient(app)
 
 
@@ -57,6 +60,25 @@ def test_interpolate_no_extrapolation():
 
 def test_delta_pb():
     assert delta_pb(0.1050, 0.1025) == 25.0
+
+
+def test_year_fraction_discounts_holiday():
+    # 2026-04-21 é Tiradentes (terça); de seg 2026-04-20 a sex 2026-04-24 há só 3 dias úteis
+    start = dt.date(2026, 4, 20)  # segunda
+    end = dt.date(2026, 4, 24)    # sexta
+    assert year_fraction(start, end) == pytest.approx(3 / 252)
+    assert not is_business_day(dt.date(2026, 4, 21))
+
+
+# ---------- mock determinístico ----------
+
+def test_mock_b3_source_deterministic():
+    from sources import MockB3Source
+    d = dt.date(2026, 8, 21)
+    c1 = MockB3Source().fetch_curve(d)
+    c2 = MockB3Source().fetch_curve(d)
+    assert c1 is not None and c2 is not None
+    assert c1.points == c2.points
 
 
 # ---------- API ----------
@@ -106,7 +128,6 @@ def test_compare_deltas_real_vs_previous(client):
     for d in body["deltas"]:
         assert d["delta_pb"] is not None
         assert d["previous_rate"] is not None
-    assert body["max_up"]["vertex_label"] or True
     mus = [d["delta_pb"] for d in body["deltas"]]
     assert body["max_up"]["delta_pb"] == max(mus)
     assert body["max_down"]["delta_pb"] == min(mus)
@@ -132,3 +153,163 @@ def test_export_csv_br_decimal(client):
 def test_unknown_date_404(client):
     r = client.get("/api/v1/curves/1999-01-01")
     assert r.status_code == 404
+
+
+# ---------- re-ingest idempotente ----------
+
+def test_reingest_same_date_no_duplicates(tmp_path):
+    from models import CurvePoint, CurveSnapshot
+    from sqlalchemy import func, select
+    db_url = f"sqlite:///{tmp_path}/byc.db"
+    engine = make_engine(db_url)
+    init_db(engine)
+    factory = make_session_factory(engine)
+    with factory() as session:
+        seed_history(session, days=3, source="mock")
+        count1 = session.execute(select(func.count(CurvePoint.id))).scalar()
+        snaps1 = session.execute(select(func.count(CurveSnapshot.id))).scalar()
+        seed_history(session, days=3, source="mock")
+        count2 = session.execute(select(func.count(CurvePoint.id))).scalar()
+        snaps2 = session.execute(select(func.count(CurveSnapshot.id))).scalar()
+    assert count1 == count2
+    assert snaps1 == snaps2
+
+
+# ---------- Fase 2: parser B3 SPRD (golden file offline) ----------
+
+FIXTURES = Path(__file__).parent / "tests" / "fixtures"
+GOLDEN_ZIP = FIXTURES / "ajustes_sprd_20260820.zip"
+
+
+def test_b3_parser_golden_file():
+    from sources import B3FuturesSource
+    data = GOLDEN_ZIP.read_bytes()
+    points = B3FuturesSource().parse(data, trade_date=dt.date(2026, 8, 20))
+    assert len(points) >= 10
+    for p in points:
+        assert p.vertex_label.startswith("DI1")
+        assert len(p.vertex_label) == 6
+        assert 0 < p.rate < 0.50
+    maturities = [p.maturity_date for p in points]
+    assert maturities == sorted(maturities)
+
+
+def test_b3_parser_ticker_maturity_coherence():
+    from sources import MONTH_BY_LETTER, maturity_from_ticker, B3FuturesSource
+    points = B3FuturesSource().parse(GOLDEN_ZIP.read_bytes(), trade_date=dt.date(2026, 8, 20))
+    by_ticker = {p.vertex_label: p for p in points}
+    p = by_ticker["DI1F27"]
+    # F = janeiro; primeiro dia útil de jan/2027 (01/01 é feriado) = 04/01
+    assert p.maturity_date == dt.date(2027, 1, 4)
+    # AdjstdQtTax do golden file para DI1F27 = 13.727 (% a.a.) -> 0.13727 decimal
+    assert p.rate == pytest.approx(0.13727)
+    for ticker, point in by_ticker.items():
+        letter, yy = ticker[3], int(ticker[4:])
+        expected_month = MONTH_BY_LETTER[letter]
+        assert point.maturity_date.year == 2000 + yy
+        assert point.maturity_date.month == expected_month
+
+
+def test_b3_parser_rate_fallback_from_pu():
+    """Sem AdjstdQtTax mas com AdjstdQt -> taxa implícita via PU."""
+    import io
+    from sources import B3FuturesSource
+
+    def rpt(ticker: str, tax: str | None) -> str:
+        tax_xml = f"<AdjstdQtTax Ccy='BRL'>{tax}</AdjstdQtTax>" if tax is not None else ""
+        return (
+            f"<PricRpt><TradDt><Dt>2026-08-20</Dt></TradDt>"
+            f"<SctyId><TckrSymb>{ticker}</TckrSymb></SctyId>"
+            f"<FinInstrmAttrbts><OpnIntrst>1</OpnIntrst>"
+            f"<AdjstdQt Ccy='BRL'>95461.23</AdjstdQt>{tax_xml}"
+            f"</FinInstrmAttrbts></PricRpt>"
+        )
+
+    xml = f"""<?xml version='1.0' encoding='utf-8'?>
+<Document xmlns='urn:bvmf.217.01.xsd'>{rpt('DI1F27', None)}{rpt('DI1F28', '13.5')}</Document>"""
+
+    # constrói o aninhamento real: zip externo contendo zip interno contendo o XML
+    inner_buf = io.BytesIO()
+    with zipfile.ZipFile(inner_buf, "w") as zi:
+        zi.writestr("BVBG.187.01_BV0001.xml", xml)
+    outer_buf = io.BytesIO()
+    with zipfile.ZipFile(outer_buf, "w") as zo:
+        zo.writestr("SPRD260820.zip", inner_buf.getvalue())
+
+    points = B3FuturesSource().parse(outer_buf.getvalue(), trade_date=dt.date(2026, 8, 20))
+    assert len(points) == 2
+    f27 = next(p for p in points if p.vertex_label == "DI1F27")
+    f28 = next(p for p in points if p.vertex_label == "DI1F28")
+    assert f28.rate == pytest.approx(0.135)
+    # DI1F27 sem taxa: PU 95461.23 até 2027-01-04 a partir de 2026-08-20
+    from conventions import _count_business_days
+    du = _count_business_days(dt.date(2026, 8, 20), dt.date(2027, 1, 4))
+    assert f27.rate == pytest.approx((100_000 / 95461.23) ** (252 / du) - 1.0)
+
+
+def test_maturity_from_ticker_rejects_options_and_bad_codes():
+    from sources import maturity_from_ticker
+    assert maturity_from_ticker("D12F27") is None      # opção sobre DI (prefixo errado)
+    assert maturity_from_ticker("DI1ABC12345") is None  # ticker longo demais
+    assert maturity_from_ticker("DI1A27") is None       # letra inválida / curto demais
+    assert maturity_from_ticker("DI1F27").year == 2027
+
+
+# ---------- Fase 2: SGS/BCB com httpx.MockTransport ----------
+
+def _sgs_mock_client(payloads: dict[int, object]) -> httpx.Client:
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = request.url.path
+        for sid, payload in payloads.items():
+            if url.endswith(f"bcdata.sgs.{sid}/dados"):
+                return httpx.Response(200, content=json.dumps(payload).encode())
+        return httpx.Response(404)
+    return httpx.Client(transport=httpx.MockTransport(handler))
+
+
+def test_sgs_comma_normalization_and_last_point():
+    from sources import SgsSource
+    payloads = {
+        1178: [{"data": "18/08/2026", "valor": "10,38"}, {"data": "20/08/2026", "valor": "10,42"}],
+        432: [{"data": "20/08/2026", "valor": "10,50"}],
+    }
+    sgs = SgsSource(client=_sgs_mock_client(payloads))
+    out = sgs.fetch_macro(dt.date(2026, 8, 21))
+    assert out["1178"] == pytest.approx(10.42)   # último ponto <= ref_date
+    assert out["432"] == pytest.approx(10.50)
+    assert "13522" not in out                    # série vazia/404 fica ausente
+    assert "1" not in out
+
+
+def test_sgs_ignores_points_after_ref_date():
+    from sources import SgsSource
+    payloads = {13522: [{"data": "20/08/2026", "valor": "4,51"},
+                        {"data": "22/08/2026", "valor": "9,99"}]}
+    sgs = SgsSource(client=_sgs_mock_client(payloads))
+    out = sgs.fetch_macro(dt.date(2026, 8, 21))
+    assert out["13522"] == pytest.approx(4.51)   # ponto futuro não vaza
+
+
+def test_sgs_empty_series_missing():
+    from sources import SgsSource
+    payloads = {1: []}
+    sgs = SgsSource(client=_sgs_mock_client(payloads))
+    out = sgs.fetch_macro(dt.date(2026, 8, 21))
+    assert out == {}
+
+
+# ---------- Fase 2: integração real (rede) — skip por padrão ----------
+
+@pytest.mark.network
+def test_b3_official_integration_recent_session():
+    from sources import B3FuturesSource
+    d = dt.date.today() - dt.timedelta(days=1)
+    while d.weekday() >= 5:
+        d -= dt.timedelta(days=1)
+    curve = B3FuturesSource().fetch_curve(d)
+    if curve is None:  # feriado sem pregão
+        pytest.skip(f"{d} sem pregão disponível")
+    assert curve.curve_type == "DI_FUTURE"
+    assert len(curve.points) >= 10
+    for p in curve.points:
+        assert 0 < p.rate < 0.50

@@ -1,9 +1,59 @@
 """Convenções numéricas do projeto (base 252 dias úteis, capitalização exponencial)."""
 from __future__ import annotations
 
+import datetime as dt
 from datetime import date
 
 BUSINESS_DAYS_PER_YEAR = 252
+
+
+def _easter(year: int) -> date:
+    """Páscoa (algoritmo anônimo/Gauss) para cálculo dos feriados móveis."""
+    a = year % 19
+    b = year // 100
+    c = year % 100
+    d = b // 4
+    e = b % 4
+    f = (b + 8) // 25
+    g = (b - f + 1) // 3
+    h = (19 * a + b - d - g + 15) % 30
+    i = c // 4
+    k = c % 4
+    l = (32 + 2 * e + 2 * i - h - k) % 7
+    m = (a + 11 * h + 22 * l) // 451
+    month = (h + l - 7 * m + 114) // 31
+    day = ((h + l - 7 * m + 114) % 31) + 1
+    return date(year, month, day)
+
+
+def _national_holidays(start_year: int, end_year: int) -> frozenset[date]:
+    holidays: set[date] = set()
+    for y in range(start_year, end_year + 1):
+        easter = _easter(y)
+        holidays.update({
+            date(y, 1, 1),    # Confraternização Universal
+            date(y, 4, 21),   # Tiradentes
+            date(y, 5, 1),    # Dia do Trabalho
+            date(y, 9, 7),    # Independência
+            date(y, 10, 12),  # Nossa Senhora Aparecida
+            date(y, 11, 2),   # Finados
+            date(y, 11, 15),  # Proclamação da República
+            date(y, 11, 20),  # Consciência Negra
+            date(y, 12, 25),  # Natal
+            easter - dt.timedelta(days=48),  # Carnaval (segunda)
+            easter - dt.timedelta(days=47),  # Carnaval (terça)
+            easter - dt.timedelta(days=2),   # Sexta-feira Santa
+            easter + dt.timedelta(days=60),  # Corpus Christi
+        })
+    return frozenset(holidays)
+
+
+HOLIDAYS: frozenset[date] = _national_holidays(2026, 2035)
+# calendário nacional simples ≠ ANBIMA/B3 completo — suficiente para o MVP
+
+
+def is_business_day(d: date) -> bool:
+    return d.weekday() < 5 and d not in HOLIDAYS
 
 
 def year_fraction(start: date, end: date, business_days: int | None = None) -> float:
@@ -22,7 +72,7 @@ def _count_business_days(start: date, end: date) -> int:
     # contagem inclusiva do fim, exclusiva do início (convenção DI)
     while d < end:
         d = date.fromordinal(d.toordinal() + step)
-        if d.weekday() < 5:
+        if is_business_day(d):
             days += 1
     return days
 

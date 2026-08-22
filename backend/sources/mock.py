@@ -1,30 +1,10 @@
-"""Adaptadores de fonte de dados (B3/BCB) com mock tipado offline."""
+"""Fonte mock tipada — testes e dev rodam offline."""
 from __future__ import annotations
 
 import datetime as dt
 import random
-from dataclasses import dataclass
-from typing import Protocol
 
-
-@dataclass(frozen=True)
-class SourcePoint:
-    vertex_label: str
-    maturity_date: dt.date
-    rate: float  # decimal anualizado base 252
-    liquidity_note: str | None = None
-
-
-@dataclass(frozen=True)
-class SourceCurve:
-    trade_date: dt.date
-    curve_type: str = "DI_FUTURE"
-    points: tuple[SourcePoint, ...] = ()
-
-
-class CurveSource(Protocol):
-    def fetch_curve(self, trade_date: dt.date) -> SourceCurve | None: ...
-
+from .base import SourceCurve, SourcePoint
 
 # Vértices MVP: 3m, 6m, 1a, 2a, 3a, 5a, 10a
 VERTEX_MONTHS = {"3m": 3, "6m": 6, "1a": 12, "2a": 24, "3a": 36, "5a": 60, "10a": 120}
@@ -46,17 +26,15 @@ class MockB3Source:
         "2a": 0.1022, "3a": 0.1025, "5a": 0.1034, "10a": 0.1050,
     }
 
-    def __init__(self, seed: int = 42):
-        self._rng = random.Random(seed)
-
     def fetch_curve(self, trade_date: dt.date) -> SourceCurve | None:
         # fins de semana não têm pregão
         if trade_date.weekday() >= 5:
             return None
-        day_shift = self._rng.uniform(-0.0015, 0.0015)
+        rng = random.Random(trade_date.toordinal())
+        day_shift = rng.uniform(-0.0015, 0.0015)
         points = []
         for label in VERTEX_MONTHS:
-            jitter = self._rng.uniform(-0.0004, 0.0004)
+            jitter = rng.uniform(-0.0004, 0.0004)
             note = "contrato DI1 líquido" if label in ("1a", "2a", "3a") else "liquidez reduzida"
             points.append(SourcePoint(
                 vertex_label=label,
