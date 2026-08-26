@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api, Curve, Compare } from './api'
 import Header from './Header'
@@ -21,6 +21,7 @@ function Skeleton() {
 
 export default function App() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const [showRef, setShowRef] = useState(false)
 
   const datesQ = useQuery({ queryKey: ['dates'], queryFn: () => api.dates() })
   const curveQ = useQuery({
@@ -38,6 +39,24 @@ export default function App() {
   const curve: Curve | undefined = curveQ.data
   const compare: Compare | undefined = compareQ.data
   const macro = macroQ.data
+  const dates = useMemo(() => datesQ.data?.dates ?? [], [datesQ.data])
+
+  // "Semana anterior" = pregão mais recente com pelo menos 7 dias corridos de defasagem.
+  // Escolhido a partir da lista de datas existentes (desc), nunca por aritmética de data:
+  // GET /curves/{date} responde 404 para um dia sem pregão.
+  const refDate = useMemo(() => {
+    if (!curve?.trade_date) return null
+    const cutoff = new Date(Date.parse(curve.trade_date) - 7 * 864e5).toISOString().slice(0, 10)
+    return dates.find((d) => d <= cutoff) ?? null
+  }, [curve?.trade_date, dates])
+
+  const refCurveQ = useQuery({
+    queryKey: ['curve-ref', refDate],
+    queryFn: () => api.byDate(refDate as string),
+    enabled: showRef && !!refDate,
+    placeholderData: (prev) => prev,
+  })
+  const refCurve = showRef && refDate ? refCurveQ.data : undefined
 
   if (curveQ.isLoading) return <Skeleton />
 
@@ -103,8 +122,14 @@ export default function App() {
 
         {curve && (
           <div className="content-grid">
-            <CurveChart curve={curve} />
-            <Panels compare={compare} curve={curve} />
+            <CurveChart
+              curve={curve}
+              refCurve={refCurve}
+              refDate={refDate}
+              showRef={showRef}
+              onToggleRef={setShowRef}
+            />
+            <Panels compare={compare} />
           </div>
         )}
 

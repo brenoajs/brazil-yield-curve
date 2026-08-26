@@ -1,11 +1,10 @@
-import { Compare, Curve } from './api'
+import { Compare } from './api'
 import { PCT, PB } from './format'
 
-// Cards "Maior alta / Maior queda" (alimentados por compare) + resumo do pregão.
-export default function Panels({ compare, curve }: { compare?: Compare; curve?: Curve }) {
+// Cards "Maior alta / Maior queda" (alimentados por compare).
+export default function Panels({ compare }: { compare?: Compare }) {
   if (!compare) return null
-  const { max_up, max_down, previous_date } = compare
-  const interpolated = curve?.points.filter((p) => p.interpolated).length ?? 0
+  const { max_up, max_down } = compare
 
   return (
     <div className="side-cards" data-testid="panels">
@@ -43,26 +42,6 @@ export default function Panels({ compare, curve }: { compare?: Compare; curve?: 
         ) : (
           <div className="delta-card-move">sem dados</div>
         )}
-      </section>
-
-      <section className="summary-card">
-        <div className="summary-title">Resumo do pregão</div>
-        <div className="summary-row">
-          <span className="summary-key">Data</span>
-          <span className="summary-val">{compare.trade_date}</span>
-        </div>
-        <div className="summary-row">
-          <span className="summary-key">Anterior</span>
-          <span className="summary-val">{previous_date ?? '—'}</span>
-        </div>
-        <div className="summary-row">
-          <span className="summary-key">Vértices</span>
-          <span className="summary-val">{curve?.points.length ?? compare.deltas.length}</span>
-        </div>
-        <div className="summary-row">
-          <span className="summary-key">Interpolados</span>
-          <span className="summary-val">{interpolated}</span>
-        </div>
       </section>
     </div>
   )
