@@ -137,7 +137,7 @@ def test_macro(client):
     r = client.get("/api/v1/macro")
     assert r.status_code == 200
     ind = r.json()["indicators"]
-    for code in ("432", "12", "13522", "1"):
+    for code in ("432", "1178", "13522", "1"):
         assert code in ind
 
 
@@ -288,6 +288,81 @@ def test_sgs_ignores_points_after_ref_date():
     sgs = SgsSource(client=_sgs_mock_client(payloads))
     out = sgs.fetch_macro(dt.date(2026, 8, 21))
     assert out["13522"] == pytest.approx(4.51)   # ponto futuro não vaza
+
+
+def test_mock_usa_os_mesmos_codigos_da_fonte_oficial():
+    """Mock e SGS precisam emitir o mesmo conjunto de códigos.
+
+    Regressão: o mock emitia '12' (inexistente no SGS) e trocava os significados de
+    432/13522/1. Como o frontend rotula por código, o KPI não ficava vazio — mostrava
+    o número errado sob o rótulo certo (IPCA exibindo um valor de câmbio).
+    """
+    from sources import MockBCBSource, SgsSource
+
+    assert set(MockBCBSource.CODES) == set(SgsSource.SERIES)
+
+    out = MockBCBSource().fetch_macro(dt.date(2026, 8, 26))
+    assert set(out) == set(SgsSource.SERIES)
+    # faixas plausíveis por indicador — pega troca de significado entre códigos
+    assert 8.0 <= out["432"] <= 20.0      # Selic meta % a.a.
+    assert 8.0 <= out["1178"] <= 20.0     # Selic efetiva % a.a.
+    assert 0.0 <= out["13522"] <= 12.0    # IPCA 12m %
+    assert 3.0 <= out["1"] <= 10.0        # USD/BRL PTAX
+
+
+def test_sgs_serie_mensal_alcancada_pela_janela_larga():
+    """13522 é mensal (datada no dia 1º) e só aparece com lookback largo.
+
+    Regressão: uma janela única de 7 dias para todas as séries nunca alcançava o
+    ponto mensal, e o SGS devolve 404 nesse caso — o IPCA sumia do KPI.
+    """
+    from sources import SgsSource
+
+    seen: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sid = request.url.path.split("bcdata.sgs.")[1].split("/")[0]
+        inicial = request.url.params["dataInicial"]
+        seen[sid] = inicial
+        start = dt.datetime.strptime(inicial, "%d/%m/%Y").date()
+        # ponto mensal do IPCA: 01/07/2026, 56 dias antes da data de referência
+        if sid == "13522":
+            if start <= dt.date(2026, 7, 1):
+                return httpx.Response(200, content=json.dumps(
+                    [{"data": "01/07/2026", "valor": "4.44"}]).encode())
+            return httpx.Response(404)  # o SGS 404 quando a janela não pega nada
+        return httpx.Response(404)
+
+    sgs = SgsSource(client=httpx.Client(transport=httpx.MockTransport(handler)))
+    out = sgs.fetch_macro(dt.date(2026, 8, 26))
+
+    assert out["13522"] == pytest.approx(4.44)
+    # a janela do IPCA precisa ser mais larga que a das séries diárias
+    assert seen["13522"] != seen["432"]
+
+
+def test_sgs_404_nao_derruba_as_demais_series():
+    """404 em uma série é ausência registrada, não erro que aborta a coleta."""
+    from sources import SgsSource
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sid = request.url.path.split("bcdata.sgs.")[1].split("/")[0]
+        if sid == "432":
+            return httpx.Response(200, content=json.dumps(
+                [{"data": "26/08/2026", "valor": "14.00"}]).encode())
+        return httpx.Response(404)
+
+    sgs = SgsSource(client=httpx.Client(transport=httpx.MockTransport(handler)))
+    out = sgs.fetch_macro(dt.date(2026, 8, 26))
+    assert out == {"432": pytest.approx(14.00)}
+
+
+def test_sgs_ponto_decimal_do_formato_json():
+    """formato=json devolve ponto decimal ("4.44"), não vírgula."""
+    from sources import SgsSource
+    sgs = SgsSource(client=_sgs_mock_client({13522: [{"data": "01/07/2026", "valor": "4.44"}]}))
+    out = sgs.fetch_macro(dt.date(2026, 8, 26))
+    assert out["13522"] == pytest.approx(4.44)
 
 
 def test_sgs_empty_series_missing():

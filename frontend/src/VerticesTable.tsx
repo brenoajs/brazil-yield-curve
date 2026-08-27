@@ -11,7 +11,9 @@ function DeltaCell({ d }: { d?: CompareDelta }) {
   )
 }
 
-// Tabela de vértices: taxa, Δ em pb vs pregão anterior, origem e liquidez.
+// Tabela de vértices: taxa, Δ em pb vs pregão anterior e origem.
+// Sem coluna de liquidez: o adaptador oficial da B3 grava liquidity_note=None
+// em todo ponto, então a coluna era sempre "—". O campo segue na API e no CSV.
 export default function VerticesTable({ curve, compare }: { curve: Curve; compare?: Compare }) {
   const byLabel = new Map(compare?.deltas.map((d) => [d.vertex_label, d]))
   return (
@@ -30,7 +32,6 @@ export default function VerticesTable({ curve, compare }: { curve: Curve; compar
             <th className="num">Taxa</th>
             <th className="num">Δ pb</th>
             <th>Origem</th>
-            <th>Liquidez</th>
           </tr>
         </thead>
         <tbody>
@@ -49,7 +50,6 @@ export default function VerticesTable({ curve, compare }: { curve: Curve; compar
                     {p.interpolated ? 'interpolado' : 'contrato'}
                   </span>
                 </td>
-                <td>{p.liquidity_note ?? '—'}</td>
               </tr>
             )
           })}

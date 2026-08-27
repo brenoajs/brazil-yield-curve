@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import App from './App'
 import * as apiMod from './api'
@@ -87,6 +87,117 @@ describe('App', () => {
     await waitFor(() => expect(screen.getByTestId('panels')).toBeTruthy())
     expect(screen.getByText('+1.5 pb')).toBeTruthy()
     expect(screen.getByText('-1 pb')).toBeTruthy()
+  })
+
+  it('toggle "semana anterior" plota a curva de 7+ dias atrás', async () => {
+    // 2026-08-14 é o pregão mais recente com 7+ dias corridos de defasagem de 2026-08-21.
+    const weekAgo: apiMod.Curve = {
+      trade_date: '2026-08-14',
+      curve_type: 'DI_FUTURE',
+      points: [
+        { vertex_label: '3m', maturity_date: '2026-11-21', rate: 0.1015, interpolated: false, liquidity_note: null },
+        { vertex_label: '6m', maturity_date: '2027-02-21', rate: 0.102, interpolated: false, liquidity_note: null },
+      ],
+    }
+    vi.spyOn(apiMod.api, 'latest').mockResolvedValue(curve)
+    vi.spyOn(apiMod.api, 'dates').mockResolvedValue({
+      dates: ['2026-08-21', '2026-08-20', '2026-08-14', '2026-08-13'],
+    })
+    vi.spyOn(apiMod.api, 'compare').mockResolvedValue(compare)
+    vi.spyOn(apiMod.api, 'macro').mockResolvedValue({ ref_date: '2026-08-21', indicators: {} })
+    const byDate = vi.spyOn(apiMod.api, 'byDate').mockResolvedValue(weekAgo)
+
+    render(
+      <QueryClientProvider client={makeClient()}>
+        <App />
+      </QueryClientProvider>,
+    )
+    await waitFor(() => expect(screen.getByTestId('curve-chart')).toBeTruthy())
+
+    // desligado por padrão: nenhuma série de referência
+    expect(document.querySelector('[data-testid="ref-line"]')).toBeNull()
+
+    fireEvent.click(screen.getByLabelText('Semana anterior'))
+
+    await waitFor(() => expect(document.querySelector('[data-testid="ref-line"]')).toBeTruthy())
+    expect(byDate).toHaveBeenCalledWith('2026-08-14')
+    // a legenda mostra a data resolvida, não um "semana anterior" genérico
+    expect(screen.getByTestId('ref-legend').textContent).toContain('2026-08-14')
+    // tooltip do ponto atual ganha o delta em pb contra a referência
+    const titles = document.querySelectorAll('svg title')
+    expect(titles[0].textContent).toContain('+25 pb')
+  })
+
+  it('ao trocar para pregão sem referência, o toggle não fica marcado-e-desabilitado', async () => {
+    const oldest: apiMod.Curve = { ...curve, trade_date: '2026-08-13' }
+    vi.spyOn(apiMod.api, 'latest').mockResolvedValue(curve)
+    vi.spyOn(apiMod.api, 'dates').mockResolvedValue({ dates: ['2026-08-21', '2026-08-14', '2026-08-13'] })
+    vi.spyOn(apiMod.api, 'compare').mockResolvedValue(compare)
+    vi.spyOn(apiMod.api, 'macro').mockResolvedValue({ ref_date: '2026-08-21', indicators: {} })
+    vi.spyOn(apiMod.api, 'byDate').mockImplementation(async (d: string) =>
+      d === '2026-08-13' ? oldest : { ...curve, trade_date: d },
+    )
+
+    render(
+      <QueryClientProvider client={makeClient()}>
+        <App />
+      </QueryClientProvider>,
+    )
+    await waitFor(() => expect(screen.getByTestId('curve-chart')).toBeTruthy())
+
+    fireEvent.click(screen.getByLabelText('Semana anterior'))
+    await waitFor(() => expect(document.querySelector('[data-testid="ref-line"]')).toBeTruthy())
+
+    // 2026-08-13 é o pregão mais antigo: não existe nenhum 7+ dias antes dele.
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: '2026-08-13' } })
+
+    await waitFor(() => {
+      const t = screen.getByLabelText('Semana anterior') as HTMLInputElement
+      expect(t.disabled).toBe(true)
+      expect(t.checked).toBe(false)
+    })
+    expect(document.querySelector('[data-testid="ref-line"]')).toBeNull()
+  })
+
+  it('toggle desabilitado quando não há pregão 7+ dias antes', async () => {
+    vi.spyOn(apiMod.api, 'latest').mockResolvedValue(curve)
+    vi.spyOn(apiMod.api, 'dates').mockResolvedValue({ dates: ['2026-08-21', '2026-08-20'] })
+    vi.spyOn(apiMod.api, 'compare').mockResolvedValue(compare)
+    vi.spyOn(apiMod.api, 'macro').mockResolvedValue({ ref_date: '2026-08-21', indicators: {} })
+    const byDate = vi.spyOn(apiMod.api, 'byDate').mockResolvedValue(curve)
+
+    render(
+      <QueryClientProvider client={makeClient()}>
+        <App />
+      </QueryClientProvider>,
+    )
+    await waitFor(() => expect(screen.getByTestId('curve-chart')).toBeTruthy())
+
+    const toggle = screen.getByLabelText('Semana anterior') as HTMLInputElement
+    expect(toggle.disabled).toBe(true)
+    expect(byDate).not.toHaveBeenCalled()
+  })
+
+  it('coluna Δ pb marca alta e queda com as classes de cor', async () => {
+    // Regressão de especificidade: .up/.down (0,1,0) perdiam para
+    // .points-table .cell-mono (0,2,0) e a coluna saía sempre charcoal,
+    // contrariando o rodapé "alta em laranja, queda em verde".
+    vi.spyOn(apiMod.api, 'latest').mockResolvedValue(curve)
+    vi.spyOn(apiMod.api, 'dates').mockResolvedValue({ dates: ['2026-08-21'] })
+    vi.spyOn(apiMod.api, 'compare').mockResolvedValue(compare)
+    vi.spyOn(apiMod.api, 'macro').mockResolvedValue({ ref_date: '2026-08-21', indicators: {} })
+    render(
+      <QueryClientProvider client={makeClient()}>
+        <App />
+      </QueryClientProvider>,
+    )
+    await waitFor(() => expect(screen.getByTestId('points-table')).toBeTruthy())
+
+    const rows = document.querySelectorAll('[data-testid="points-table"] tbody tr')
+    const deltaCell = (r: Element) => r.querySelectorAll('td')[3]
+    // 3m: +1.5 pb (alta) · 6m: -1.0 pb (queda)
+    expect(deltaCell(rows[0]).className).toContain('up')
+    expect(deltaCell(rows[1]).className).toContain('down')
   })
 
   it('estado de erro com retry', async () => {

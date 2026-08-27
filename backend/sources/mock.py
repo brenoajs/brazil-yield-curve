@@ -46,15 +46,20 @@ class MockB3Source:
 
 
 class MockBCBSource:
-    """Macro BCB SGS: 432 (IPCA 12m), 12 (Selic), 13522 (câmbio PTAX), 1 (Selic alvo)."""
+    """Macro BCB SGS — mesmos códigos de série da fonte oficial (SgsSource.SERIES).
 
-    CODES = ("432", "12", "13522", "1")
+    Os códigos precisam bater com o SGS real: o frontend rotula cada KPI por código
+    (MACRO_LABELS em api.ts), então um código trocado aqui não deixa o KPI vazio —
+    ele exibe o valor errado sob o rótulo certo, silenciosamente.
+    """
+
+    CODES = ("432", "1178", "13522", "1")
 
     def fetch_macro(self, ref_date: dt.date) -> dict[str, float]:
         rng = random.Random(ref_date.toordinal())
         return {
-            "432": round(rng.uniform(3.5, 6.5), 2),      # IPCA 12m %
-            "12": round(rng.uniform(10.0, 15.0), 2),     # Selic %
-            "13522": round(rng.uniform(4.8, 6.2), 4),    # USD/BRL
-            "1": round(rng.uniform(10.0, 15.0), 2),      # Selic alvo %
+            "432": round(rng.uniform(10.0, 15.0), 2),    # Selic meta % a.a.
+            "1178": round(rng.uniform(10.0, 15.0), 2),   # Selic efetiva % a.a.
+            "13522": round(rng.uniform(3.5, 6.5), 2),    # IPCA acumulado 12m %
+            "1": round(rng.uniform(4.8, 6.2), 4),        # USD/BRL PTAX venda
         }

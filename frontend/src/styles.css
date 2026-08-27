@@ -190,19 +190,41 @@
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px 16px;
   margin-bottom: 4px;
+  flex-wrap: wrap;
 }
-.card-title { margin: 0; font-size: 16px; font-weight: 600; }
-.chart-legend { display: flex; align-items: center; gap: 16px; }
+.card-title { margin: 0; font-size: 16px; font-weight: 600; white-space: nowrap; }
+.card-head-actions { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.chart-legend { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--color-steel); }
 .legend-dot { width: 7px; height: 7px; border-radius: 9999px; background: var(--color-electric-blue); }
-.legend-ring {
-  width: 7px;
-  height: 7px;
-  border-radius: 9999px;
-  border: 1.5px solid var(--color-silver);
+/* Traço da série de referência — cinza neutro: laranja/verde já significam alta/queda. */
+.legend-dash {
+  width: 14px;
+  height: 0;
+  border-top: 1.75px dashed var(--color-silver);
 }
+.toggle-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--color-steel);
+  border: 1px solid var(--color-ash);
+  border-radius: 9999px;
+  padding: 5px 12px 5px 10px;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.toggle-field:hover { border-color: var(--color-smoke); }
+.toggle-field input { accent-color: var(--color-electric-blue); margin: 0; cursor: pointer; }
+.toggle-field:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.toggle-field:has(input:disabled) input { cursor: not-allowed; }
 .chart-wrap { position: relative; }
 .chart-svg { width: 100%; display: block; overflow: visible; }
 .chart-overlay {
@@ -264,23 +286,6 @@
   padding-top: 10px;
   border-top: 1px solid var(--color-ash);
 }
-.summary-card {
-  border: 1px solid var(--color-ash);
-  border-radius: 12px;
-  padding: 16px;
-  background: var(--color-paper-mist);
-}
-.summary-title { font-size: 13px; font-weight: 600; margin-bottom: 12px; }
-.summary-row {
-  display: flex;
-  justify-content: space-between;
-  font-size: 13px;
-  gap: 8px;
-}
-.summary-row + .summary-row { margin-top: 8px; }
-.summary-key { color: var(--color-fog); }
-.summary-val { font-family: var(--font-geist-mono); }
-
 /* ---------- Vertices table ---------- */
 .vertices-section { border: 1px solid var(--color-ash); border-radius: 16px; overflow: hidden; }
 .vertices-head {
@@ -316,6 +321,10 @@
   font-variant-numeric: tabular-nums;
 }
 .points-table th.num, .points-table td.num { text-align: right; }
+/* .up/.down (0,1,0) perdiam para .points-table .cell-mono (0,2,0) e a coluna Δ pb
+   saía sempre charcoal — o rodapé prometia laranja/verde que a tabela não cumpria. */
+.points-table td.up { color: var(--color-tangerine); }
+.points-table td.down { color: var(--color-vivid-green); }
 .badge {
   display: inline-flex;
   align-items: center;
@@ -324,7 +333,9 @@
   font-size: 12px;
   color: var(--color-charcoal);
 }
-.badge-contract { background: var(--color-soft-mint); }
+/* Neutro, não verde: com a coluna Δ pb agora colorida, uma coluna inteira de pílulas
+   verdes ao lado lia como sinal de queda. Verde significa só "queda de taxa". */
+.badge-contract { background: var(--color-paper-mist); }
 .badge-interp { background: var(--color-paper-mist); }
 .footnote {
   margin: 24px 0 0;
