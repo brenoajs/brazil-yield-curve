@@ -67,15 +67,21 @@ async function request<T>(url: string): Promise<T> {
   return res.json() as Promise<T>
 }
 
+// Base do site: '/' em dev, '/brazil-yield-curve/' no GitHub Pages.
+// Em build estático, a API vira arquivos: /api/v1/curves/DI_FUTURE/latest.json
+const BASE = import.meta.env.BASE_URL
+
+const curveBase = (curveType: string) => `${BASE}api/v1/curves/${curveType}`
+
 export const api = {
-  latest: (curveType: string = 'DI_FUTURE') => request<Curve>(`/api/v1/curves/latest?curve_type=${curveType}`),
+  latest: (curveType: string = 'DI_FUTURE') => request<Curve>(`${curveBase(curveType)}/latest.json`),
   dates: (curveType: string = 'DI_FUTURE') =>
-    request<{ dates: string[] }>(`/api/v1/curves/dates?curve_type=${curveType}`),
+    request<{ dates: string[] }>(`${curveBase(curveType)}/dates.json`),
   byDate: (date: string, curveType: string = 'DI_FUTURE') =>
-    request<Curve>(`/api/v1/curves/${date}?curve_type=${curveType}`),
+    request<Curve>(`${curveBase(curveType)}/${date}.json`),
   compare: (date?: string, curveType: string = 'DI_FUTURE') =>
-    request<Compare>(`/api/v1/curves/compare?curve_type=${curveType}${date ? `&trade_date=${date}` : ''}`),
-  macro: () => request<Macro>('/api/v1/macro'),
+    request<Compare>(`${curveBase(curveType)}/compare/${date ?? 'latest'}.json`),
+  macro: () => request<Macro>(`${BASE}api/v1/macro.json`),
   exportCsvUrl: (date?: string, curveType: string = 'DI_FUTURE') =>
-    `/api/v1/export/curve.csv?curve_type=${curveType}${date ? `&trade_date=${date}` : ''}`,
+    `${BASE}api/v1/export/${curveType}/${date ?? 'latest'}.csv`,
 }

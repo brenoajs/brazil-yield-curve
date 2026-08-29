@@ -84,13 +84,26 @@ npm install
 npm run dev
 ```
 
-Vite sobe em <http://127.0.0.1:5173> e faz proxy de `/api` para `127.0.0.1:8021` — deixe o backend rodando. Para checar o proxy: <http://127.0.0.1:5173/api/v1/health>.
+Vite sobe em <http://127.0.0.1:5173>.
+
+O frontend **não fala com o backend em runtime**: ele consome a API como arquivos
+estáticos em `frontend/public/api/v1/`, gerados pelo backend. Antes do primeiro
+`npm run dev`, exporte o snapshot (a partir de `backend/`):
+
+```powershell
+.venv\Scripts\python.exe export_static.py --out ..\frontend\public
+```
+
+Repita esse comando sempre que reindexar dados. `frontend/public/api/` não é versionado.
+
+O servidor FastAPI continua útil para inspecionar a API ao vivo em <http://127.0.0.1:8021/docs>,
+mas não é necessário para rodar o frontend.
 
 Build de produção:
 
 ```powershell
-npm run build      # saída em dist/
-npm run preview    # serve dist/ em 127.0.0.1:5173, com o mesmo proxy
+npm run build      # saída em dist/, com base /brazil-yield-curve/
+npm run preview    # serve dist/ em 127.0.0.1:5173
 ```
 
 ### Encerrar
@@ -156,10 +169,42 @@ Estado verificado nesta máquina (Windows 11, Node 22.13.0), em 2026-08-26:
 | Script | Plataforma | O que faz |
 |---|---|---|
 | `backend/seed.py` | qualquer | popula N pregões úteis no SQLite |
+| `backend/export_static.py` | qualquer | congela a API em arquivos estáticos para o Pages |
 | `scripts/dev.sh` | **Linux/macOS apenas** | sobe backend + frontend juntos |
 | `scripts/ingest_daily.sh` | **Linux apenas** | ingestão diária da fonte oficial (systemd timer / cron) |
 
 Os dois `.sh` assumem `.venv/bin/python`, caminho que não existe em venv de Windows (lá é `.venv\Scripts\`), então **não funcionam nem sob Git Bash**. No Windows, use o fluxo de dois terminais descrito acima.
+
+---
+
+## Deploy automático no GitHub Pages
+
+O site é publicado em <https://brenoajs.github.io/brazil-yield-curve/> por
+`.github/workflows/pages.yml`. Como o Pages só hospeda arquivos estáticos, o
+workflow **não sobe o FastAPI**: ele roda a ingestão, congela a API em JSON/CSV
+e publica esses arquivos junto com o bundle.
+
+Etapas do job:
+
+1. `seed.py --days 15 --source official` (3 tentativas, com 60s entre elas — se falhar, o job falha e o site anterior continua no ar)
+2. `export_static.py --out ../frontend/public` — grava `api/v1/curves/<TIPO>/<data>.json`, `compare/`, `dates.json`, `latest.json`, `macro.json` e os CSVs em `api/v1/export/`
+3. `npm ci && npm test && npm run build`
+4. `upload-pages-artifact` + `deploy-pages`
+
+Gatilhos: push em `main`, `workflow_dispatch` (botão *Run workflow*) e cron
+`0 22 * * 1-5` (22:00 UTC ≈ 19:00 BRT, após o fechamento da B3).
+
+### Habilitação (passo manual, uma vez)
+
+Em **Settings → Pages → Build and deployment → Source**, escolha **GitHub Actions**.
+Sem isso o workflow roda e o deploy fica parado sem erro óbvio.
+
+### Limitações conhecidas
+
+- O site fica **público** — é uma inversão deliberada da postura atual do projeto (backend em `127.0.0.1` + túnel SSH). Os dados são públicos (B3 e BCB), então não há vazamento, mas a decisão é sua.
+- O histórico é **reconstruído do zero a cada execução** (o runner é efêmero e `byc.db` não é versionado): sempre os últimos ~15 pregões. Para acumular meses, seria preciso persistir o banco (ex.: branch `data`).
+- Cron do GitHub atrasa de 10 a 60 min no plano gratuito e é **desativado após 60 dias sem atividade no repositório**.
+- `base` do Vite está fixo em `/brazil-yield-curve/` (`frontend/vite.config.ts`). Domínio próprio ou repo `<user>.github.io` → troque para `/`.
 
 ---
 

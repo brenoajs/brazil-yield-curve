@@ -18,3 +18,4 @@ frontend/*.tsbuildinfo
 !.env.example
 *.log
 .DS_Store
+frontend/public/api/
