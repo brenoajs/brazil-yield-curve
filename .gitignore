@@ -19,3 +19,6 @@ frontend/*.tsbuildinfo
 *.log
 .DS_Store
 frontend/public/api/
+/docs
+design.md 
+deploy_pages.md
