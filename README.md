@@ -4,6 +4,7 @@ Página de análise da curva de juros brasileira (DI futuro — DI1/B3).
 
 - **Backend**: FastAPI + SQLAlchemy (SQLite) — convenções base 252 dias úteis, capitalização exponencial `(1+y)^t`, variações em pb, interpolação linear marcada como `interpolated` (sem extrapolação).
 - **Frontend**: React 18 + TypeScript + Vite + TanStack Query — gráfico em SVG próprio (`src/CurveChart.tsx`, sem dependência de biblioteca de charts em runtime) com **eixo por vencimento** (`maturity_date` por ponto), tooltip com vencimento/liquidez e toggle **"Semana anterior"**, que sobrepõe a curva do pregão mais recente com 7+ dias corridos de defasagem.
+- **Segurança da ingestão**: o parser do SPRD trata ZIP aninhado, que é o formato de uma zip bomb, então cada membro tem teto de tamanho verificado antes de descomprimir e o download é limitado por streaming; o XML passa por `defusedxml` (expansão de entidade recusada).
 - **Fontes de dados**: adaptadores em `backend/sources/` — `official` (B3 SPRD para a curva DI e BCB SGS para macro; **requer internet**) e `mock` (dados sintéticos tipados, roda 100% offline).
 
 ## Bloqueios corrigidos preservados
@@ -142,7 +143,7 @@ npm run build
 
 Estado verificado nesta máquina (Windows 11, Node 22.13.0), em 2026-08-26:
 
-- backend: 25 passed / 1 deselected — em Python 3.11.15 (`uv venv`) **e** 3.13.1 (`py -3 -m venv`)
+- backend: 31 passed / 1 deselected — em Python 3.11.15 (`uv venv`) **e** 3.13.1 (`py -3 -m venv`)
 - frontend: 9 passed, `tsc --noEmit` limpo, `npm run lint` limpo, build ok
 - boot ponta a ponta: `/api/v1/health` responde `ok` em `:8021`, e o frontend em `:5173` lê o snapshot estático de `frontend/public/api/v1/`
 
