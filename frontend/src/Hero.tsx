@@ -17,7 +17,7 @@ function chipText(bucket: string, deltaPb: number | null | undefined) {
   )
 }
 
-// Cabeçalho editorial: pregão atual vs anterior + chips de movimento.
+// Pregão atual contra o anterior, com chips de movimento no miolo e no longo.
 export default function Hero({ curve, compare }: { curve: Curve; compare?: Compare }) {
   const deltas = new Map(compare?.deltas.map((d) => [d.vertex_label, d.delta_pb]))
   const mid = curve.points[Math.floor((curve.points.length - 1) / 2)]
@@ -32,8 +32,8 @@ export default function Hero({ curve, compare }: { curve: Curve; compare?: Compa
         </div>
         <h1 className="hero-title">Curva de juros nominal</h1>
         <p className="hero-sub">
-          Vértices da curva DI futuro (DI1), eixo horizontal por data de vencimento
-          {compare?.previous_date ? `, comparados com o pregão anterior de ${compare.previous_date}` : ''}.
+          Vértices do DI futuro (DI1) posicionados pela data de vencimento
+          {compare?.previous_date ? `, comparados com o pregão de ${compare.previous_date}` : ''}.
         </p>
       </div>
       <div className="delta-chips" data-testid="hero-chips">

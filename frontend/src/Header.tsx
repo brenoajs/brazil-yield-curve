@@ -18,7 +18,7 @@ export default function Header({
         <span className="brand-sub">DI1 · futuro de juros</span>
       </div>
       <div className="header-controls">
-        <div className="select-field">
+        <label className="select-field">
           <span>Pregão</span>
           <select value={selectedDate ?? ''} onChange={(e) => onDateChange(e.target.value)}>
             {dates.map((d) => (
@@ -27,7 +27,7 @@ export default function Header({
               </option>
             ))}
           </select>
-        </div>
+        </label>
         <a className="btn-dark" href={csvHref} download>
           Exportar CSV
         </a>
