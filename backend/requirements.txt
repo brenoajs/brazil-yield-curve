@@ -4,4 +4,5 @@ uvicorn[standard]>=0.52,<1
 sqlalchemy>=2.0,<3
 pydantic>=2.13,<3
 httpx>=0.28,<1
+defusedxml>=0.7,<1  # ET.fromstring expande entidade sem limite (billion laughs)
 pytest>=9,<10

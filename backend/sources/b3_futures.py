@@ -13,9 +13,9 @@ import datetime as dt
 import io
 import re
 import zipfile
-import xml.etree.ElementTree as ET
 
 import httpx
+from defusedxml.ElementTree import fromstring as xml_fromstring
 
 from conventions import BUSINESS_DAYS_PER_YEAR, _count_business_days, is_business_day
 from .base import SourceCurve, SourcePoint
@@ -27,6 +27,25 @@ MONTH_BY_LETTER = {"F": 1, "G": 2, "H": 3, "J": 4, "K": 5, "M": 6,
                    "N": 7, "Q": 8, "U": 9, "V": 10, "X": 11, "Z": 12}
 
 MIN_PAYLOAD_BYTES = 1024  # payload <1KB = sem pregão (feriado/fim de semana)
+
+# Tetos contra zip bomb. O SPRD real é da ordem de 130 KB comprimido e cada XML
+# interno descomprime para ~4,8 MB (razão ~60x), então há folga de duas ordens
+# de grandeza. Sem os tetos, um ZIP hostil de poucos KB — a estrutura aninhada
+# que este parser aceita de propósito é justamente o formato de uma zip bomb —
+# descomprimiria sem limite em memória.
+MAX_DOWNLOAD_BYTES = 32 * 1024 * 1024
+MAX_MEMBER_BYTES = 64 * 1024 * 1024
+
+
+class PayloadTooLarge(ValueError):
+    """Resposta ou membro de ZIP acima do teto aceito."""
+
+
+def _read_member(zf: zipfile.ZipFile, name: str) -> bytes:
+    """Lê um membro do ZIP recusando o que se declara maior que MAX_MEMBER_BYTES."""
+    if zf.getinfo(name).file_size > MAX_MEMBER_BYTES:
+        raise PayloadTooLarge(f"membro {name} declara {zf.getinfo(name).file_size} bytes")
+    return zf.read(name)
 
 
 def maturity_from_ticker(ticker: str) -> dt.date | None:
@@ -49,10 +68,19 @@ class B3FuturesSource:
 
     def fetch_curve(self, trade_date: dt.date) -> SourceCurve | None:
         url = f"https://www.b3.com.br/pesquisapregao/download?filelist=SPRD{trade_date:%y%m%d}.zip"
-        resp = self._client.get(url, timeout=30.0)
-        if resp.status_code != 200:
-            return None
-        data = resp.content
+        # stream + teto: `resp.content` bufferizaria o corpo inteiro antes de
+        # qualquer checagem, então um upstream hostil escolheria o tamanho.
+        with self._client.stream("GET", url, timeout=30.0) as resp:
+            if resp.status_code != 200:
+                return None
+            chunks: list[bytes] = []
+            total = 0
+            for chunk in resp.iter_bytes():
+                total += len(chunk)
+                if total > MAX_DOWNLOAD_BYTES:
+                    raise PayloadTooLarge(f"{url} passou de {MAX_DOWNLOAD_BYTES} bytes")
+                chunks.append(chunk)
+        data = b"".join(chunks)
         # resposta pequena/não-zip = dia sem pregão, não é erro
         if len(data) < MIN_PAYLOAD_BYTES or not zipfile.is_zipfile(io.BytesIO(data)):
             return None
@@ -71,7 +99,7 @@ class B3FuturesSource:
         xml_bytes = self._latest_xml(outer)
         if xml_bytes is None:
             return ()
-        root = ET.fromstring(xml_bytes)
+        root = xml_fromstring(xml_bytes)
 
         if trade_date is None:
             for el in root.iter():
@@ -117,14 +145,14 @@ class B3FuturesSource:
         latest: tuple[str, bytes] | None = None
         for name in sorted(outer.namelist()):
             try:
-                inner = zipfile.ZipFile(io.BytesIO(outer.read(name)))
+                inner = zipfile.ZipFile(io.BytesIO(_read_member(outer, name)))
             except zipfile.BadZipFile:
                 continue
             xml_names = [n for n in inner.namelist() if n.lower().endswith(".xml")]
             if not xml_names:
                 continue
             xml_name = sorted(xml_names)[-1]
-            candidate = (xml_name, inner.read(xml_name))
+            candidate = (xml_name, _read_member(inner, xml_name))
             if latest is None or candidate[0] > latest[0]:
                 latest = candidate
         return latest[1] if latest else None

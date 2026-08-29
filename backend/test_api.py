@@ -247,6 +247,50 @@ def test_b3_parser_rate_fallback_from_pu():
     assert f27.rate == pytest.approx((100_000 / 95461.23) ** (252 / du) - 1.0)
 
 
+def _nested_zip(xml: str, inner_name: str = "BVBG.187.01_BV0001.xml") -> bytes:
+    """Monta o aninhamento real do SPRD: zip externo -> zip interno -> XML."""
+    import io
+    inner_buf = io.BytesIO()
+    with zipfile.ZipFile(inner_buf, "w", zipfile.ZIP_DEFLATED) as zi:
+        zi.writestr(inner_name, xml)
+    outer_buf = io.BytesIO()
+    with zipfile.ZipFile(outer_buf, "w", zipfile.ZIP_DEFLATED) as zo:
+        zo.writestr("SPRD260820.zip", inner_buf.getvalue())
+    return outer_buf.getvalue()
+
+
+def test_b3_parser_recusa_membro_acima_do_teto(monkeypatch):
+    """Zip bomb: o parser aceita ZIP aninhado de propósito, que é o formato de uma
+    bomba. Um membro que se declara acima do teto tem que ser recusado ANTES de
+    descomprimir, não depois de estourar a memória."""
+    from sources import b3_futures
+    from sources import B3FuturesSource
+
+    payload = _nested_zip("<Document xmlns='urn:bvmf.217.01.xsd'></Document>")
+    # teto abaixo do tamanho do membro interno, em vez de gerar centenas de MB no teste
+    monkeypatch.setattr(b3_futures, "MAX_MEMBER_BYTES", 8)
+    with pytest.raises(b3_futures.PayloadTooLarge):
+        B3FuturesSource().parse(payload, trade_date=dt.date(2026, 8, 20))
+
+
+def test_b3_parser_recusa_expansao_de_entidade():
+    """Billion laughs: xml.etree expande entidade interna sem limite. defusedxml
+    recusa a declaração antes de qualquer expansão."""
+    from defusedxml.common import EntitiesForbidden
+    from sources import B3FuturesSource
+
+    bomba = """<?xml version='1.0'?>
+<!DOCTYPE Document [
+  <!ENTITY a "aaaaaaaaaa">
+  <!ENTITY b "&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;">
+  <!ENTITY c "&b;&b;&b;&b;&b;&b;&b;&b;&b;&b;">
+]>
+<Document xmlns='urn:bvmf.217.01.xsd'><PricRpt>&c;</PricRpt></Document>"""
+
+    with pytest.raises(EntitiesForbidden):
+        B3FuturesSource().parse(_nested_zip(bomba), trade_date=dt.date(2026, 8, 20))
+
+
 def test_maturity_from_ticker_rejects_options_and_bad_codes():
     from sources import maturity_from_ticker
     assert maturity_from_ticker("D12F27") is None      # opção sobre DI (prefixo errado)

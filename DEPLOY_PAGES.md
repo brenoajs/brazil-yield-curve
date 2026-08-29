@@ -89,14 +89,31 @@ Um efeito colateral desejável: o commit diário no branch `data` conta como ati
 
 ### 2.1 — Ajustar as permissões do workflow
 
-Em `.github/workflows/pages.yml`, troque o bloco `permissions`:
+Em `.github/workflows/pages.yml`, declare as permissões **por job**, não no
+workflow inteiro. Só o job de build precisa escrever, e só para gravar no branch
+`data`:
 
 ```yaml
-permissions:
-  contents: write   # era: read — necessário para gravar no branch `data`
-  pages: write
-  id-token: write
+jobs:
+  build:
+    permissions:
+      contents: write   # push do snapshot do banco no branch `data`
+    steps:
+      # sem persist-credentials o token com escopo de escrita não fica no
+      # .git/config do workspace enquanto `npm ci` roda lifecycle script de
+      # dependência de terceiro
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+  deploy:
+    permissions:
+      pages: write
+      id-token: write
 ```
+
+O `git fetch` do branch `data` continua funcionando sem credencial porque o
+repositório é público; o push monta a própria URL autenticada em `/tmp`.
 
 Não é preciso criar secret: o `GITHUB_TOKEN` já é injetado automaticamente.
 
