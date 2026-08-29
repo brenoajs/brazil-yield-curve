@@ -24,7 +24,7 @@ export default function KpiStrip({ macro }: { macro?: Macro }) {
   // indicadores fora da ordem fixa entram no fim
   for (const [code] of Object.entries(macro?.indicators ?? {})) {
     if (!ORDER.some((o) => o.code === code)) {
-      items.push({ key: code, label: MACRO_LABELS[code] ?? code, value: String(macro!.indicators[code]) })
+      items.push({ key: code, label: MACRO_LABELS[code] ?? code, value: pct(macro!.indicators[code]) })
     }
   }
   return (

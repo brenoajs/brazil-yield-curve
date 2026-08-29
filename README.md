@@ -143,8 +143,8 @@ npm run build
 Estado verificado nesta máquina (Windows 11, Node 22.13.0), em 2026-08-26:
 
 - backend: 25 passed / 1 deselected — em Python 3.11.15 (`uv venv`) **e** 3.13.1 (`py -3 -m venv`)
-- frontend: 4 passed, `tsc --noEmit` limpo, `npm run lint` limpo, build ok
-- boot ponta a ponta: `/api/v1/health` responde `ok` direto em `:8021` e via proxy do Vite em `:5173`
+- frontend: 9 passed, `tsc --noEmit` limpo, `npm run lint` limpo, build ok
+- boot ponta a ponta: `/api/v1/health` responde `ok` em `:8021`, e o frontend em `:5173` lê o snapshot estático de `frontend/public/api/v1/`
 
 ---
 

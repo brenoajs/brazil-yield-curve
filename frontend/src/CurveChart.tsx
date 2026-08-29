@@ -124,8 +124,8 @@ export default function CurveChart({
             className="toggle-field"
             title={
               refDate
-                ? `Compara com o pregão de ${refDate} (último com 7+ dias de defasagem)`
-                : 'Histórico insuficiente: nenhum pregão 7 dias ou mais antes deste'
+                ? `Compara com o pregão de ${refDate}, o mais recente com 7+ dias de defasagem`
+                : 'Nenhum pregão 7 dias ou mais antes deste'
             }
           >
             <input
@@ -220,8 +220,8 @@ export default function CurveChart({
         </div>
       </div>
       <p className="chart-note">
-        Eixo horizontal por data de vencimento. Passe o mouse sobre um ponto para ver o vencimento
-        {showRef && refCurve ? ' e a variação em pb contra a semana anterior' : ''}.
+        Aponte um vértice para ver ticker, vencimento e taxa
+        {showRef && refCurve ? ', mais a variação em pb contra a semana anterior' : ''}.
       </p>
     </section>
   )

@@ -85,7 +85,7 @@ describe('App', () => {
       </QueryClientProvider>,
     )
     await waitFor(() => expect(screen.getByTestId('panels')).toBeTruthy())
-    expect(screen.getByText('+1.5 pb')).toBeTruthy()
+    expect(screen.getByText('+1,5 pb')).toBeTruthy()
     expect(screen.getByText('-1 pb')).toBeTruthy()
   })
 
@@ -198,6 +198,27 @@ describe('App', () => {
     // 3m: +1.5 pb (alta) · 6m: -1.0 pb (queda)
     expect(deltaCell(rows[0]).className).toContain('up')
     expect(deltaCell(rows[1]).className).toContain('down')
+  })
+
+  it('vértice sem pregão anterior não vira 0,00%', async () => {
+    // previous_rate/delta_pb nulos = o vértice não existia ontem. Escrever 0,00%
+    // aqui seria uma taxa medida na leitura de quem olha o card.
+    const semAnterior = {
+      ...compare,
+      max_up: { vertex_label: '3m', maturity_date: '2026-11-21', rate: 0.104, previous_rate: null, delta_pb: null },
+    }
+    vi.spyOn(apiMod.api, 'latest').mockResolvedValue(curve)
+    vi.spyOn(apiMod.api, 'dates').mockResolvedValue({ dates: ['2026-08-21'] })
+    vi.spyOn(apiMod.api, 'compare').mockResolvedValue(semAnterior)
+    vi.spyOn(apiMod.api, 'macro').mockResolvedValue({ ref_date: '2026-08-21', indicators: {} })
+    render(
+      <QueryClientProvider client={makeClient()}>
+        <App />
+      </QueryClientProvider>,
+    )
+    await waitFor(() => expect(screen.getByTestId('panels')).toBeTruthy())
+    expect(screen.getByText(/sem vértice no pregão anterior/)).toBeTruthy()
+    expect(screen.queryByText(/0,00%/)).toBeNull()
   })
 
   it('estado de erro com retry', async () => {

@@ -24,15 +24,15 @@
     'Segoe UI', Roboto, sans-serif;
   --font-geist-mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
     monospace;
+}
 
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    background: var(--color-canvas-white);
-    color: var(--color-charcoal);
-    font-family: var(--font-inter);
-    -webkit-font-smoothing: antialiased;
-  }
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--color-canvas-white);
+  color: var(--color-charcoal);
+  font-family: var(--font-inter);
+  -webkit-font-smoothing: antialiased;
 }
 
 .mono { font-family: var(--font-geist-mono); }
@@ -92,8 +92,10 @@
   font-size: 13px;
   color: var(--color-charcoal);
   cursor: pointer;
-  outline: none;
 }
+.select-field:focus-within { border-color: var(--color-electric-blue); }
+.select-field select:focus { outline: none; }
+.select-field select:focus-visible { outline: 2px solid var(--color-electric-blue); outline-offset: 2px; }
 .btn-dark {
   height: 32px;
   padding: 0 14px;
@@ -295,7 +297,8 @@
   padding: 16px 20px;
   border-bottom: 1px solid var(--color-ash);
 }
-.points-table { width: 100%; border-collapse: collapse; }
+.vertices-scroll { overflow-x: auto; }
+.points-table { width: 100%; min-width: 560px; border-collapse: collapse; }
 .points-table th {
   text-align: left;
   padding: 10px 20px;

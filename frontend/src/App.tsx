@@ -27,7 +27,7 @@ export default function App() {
   const curveQ = useQuery({
     queryKey: ['curve', selectedDate],
     queryFn: () => (selectedDate ? api.byDate(selectedDate) : api.latest()),
-    placeholderData: (prev) => prev, // preserva último dado válido (staleness)
+    placeholderData: (prev) => prev, // mantém a curva anterior na tela enquanto a nova carrega
   })
   const compareQ = useQuery({
     queryKey: ['compare', selectedDate],
@@ -66,15 +66,16 @@ export default function App() {
       <div>
         <Header
           dates={datesQ.data?.dates ?? []}
-          selectedDate={undefined}
+          selectedDate={selectedDate ?? undefined}
           onDateChange={setSelectedDate}
           csvHref={api.exportCsvUrl(undefined)}
         />
         <div className="error-box" data-testid="error-state">
           <h1>Curva DI</h1>
           <p>
-            Falha ao carregar a curva
-            {env?.error === 'no_data' ? ' — nenhum pregão disponível ainda.' : '.'}
+            {env?.error === 'no_data'
+              ? 'Nenhum pregão disponível ainda.'
+              : 'Não foi possível carregar a curva.'}
           </p>
           <button onClick={() => curveQ.refetch()}>Tentar novamente</button>
         </div>
@@ -87,7 +88,7 @@ export default function App() {
       <div>
         <Header
           dates={datesQ.data?.dates ?? []}
-          selectedDate={curve.trade_date}
+          selectedDate={selectedDate ?? curve.trade_date}
           onDateChange={setSelectedDate}
           csvHref={api.exportCsvUrl(curve.trade_date)}
         />
@@ -104,7 +105,7 @@ export default function App() {
     <div>
       <Header
         dates={datesQ.data?.dates ?? []}
-        selectedDate={curve?.trade_date}
+        selectedDate={selectedDate ?? curve?.trade_date}
         onDateChange={setSelectedDate}
         csvHref={api.exportCsvUrl(curve?.trade_date)}
       />
@@ -114,7 +115,7 @@ export default function App() {
 
         {curveQ.isFetching && !curveQ.isLoading && (
           <div className="stale-banner" data-testid="stale-banner">
-            Atualizando… exibindo último dado válido.
+            Atualizando. Os números na tela ainda são da carga anterior.
           </div>
         )}
 

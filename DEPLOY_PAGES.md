@@ -67,7 +67,7 @@ npm run build
 npm run preview
 ```
 
-Esperado: `8 passed`, build sem erro de `tsc`, e o preview abrindo em <http://127.0.0.1:5173>. Confira no navegador que o gráfico carrega, o seletor de datas lista pregões e o toggle "Semana anterior" funciona — se algo aparecer vazio, o problema é caminho de arquivo, não o deploy.
+Esperado: `9 passed`, build sem erro de `tsc`, e o preview abrindo em <http://127.0.0.1:5173>. Confira no navegador que o gráfico carrega, o seletor de datas lista pregões e o toggle "Semana anterior" funciona — se algo aparecer vazio, o problema é caminho de arquivo, não o deploy.
 
 Encerre o preview com `Ctrl+C`.
 
