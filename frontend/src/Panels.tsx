@@ -2,7 +2,7 @@ import { CompareDelta, Compare } from './api'
 import { PCT, PB } from './format'
 
 // previous_rate/delta_pb vêm nulos quando o vértice não existia no pregão anterior.
-// Nesse caso a célula fica em "—": um 0,00% escrito seria lido como taxa medida.
+// Nesse caso a célula fica em "—": um 0,000% escrito seria lido como taxa medida.
 const deltaText = (d: CompareDelta) => (d.delta_pb == null ? '—' : PB(d.delta_pb))
 const moveText = (d: CompareDelta) =>
   d.previous_rate == null ? `sem vértice no pregão anterior · ${PCT(d.rate)}` : `${PCT(d.previous_rate)} → ${PCT(d.rate)}`

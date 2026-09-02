@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import App from './App'
 import * as apiMod from './api'
@@ -85,8 +85,11 @@ describe('App', () => {
       </QueryClientProvider>,
     )
     await waitFor(() => expect(screen.getByTestId('panels')).toBeTruthy())
-    expect(screen.getByText('+1,5 pb')).toBeTruthy()
-    expect(screen.getByText('-1 pb')).toBeTruthy()
+    // escopo em panels: os chips do Hero mostram os mesmos Δ (miolo/longo),
+    // então getByText global ficaria ambíguo.
+    const panels = screen.getByTestId('panels')
+    expect(within(panels).getByText('+1,5 pb')).toBeTruthy()
+    expect(within(panels).getByText('-1 pb')).toBeTruthy()
   })
 
   it('toggle "semana anterior" plota a curva de 7+ dias atrás', async () => {
@@ -200,8 +203,8 @@ describe('App', () => {
     expect(deltaCell(rows[1]).className).toContain('down')
   })
 
-  it('vértice sem pregão anterior não vira 0,00%', async () => {
-    // previous_rate/delta_pb nulos = o vértice não existia ontem. Escrever 0,00%
+  it('vértice sem pregão anterior não vira 0,000%', async () => {
+    // previous_rate/delta_pb nulos = o vértice não existia ontem. Escrever 0,000%
     // aqui seria uma taxa medida na leitura de quem olha o card.
     const semAnterior = {
       ...compare,
@@ -219,6 +222,7 @@ describe('App', () => {
     await waitFor(() => expect(screen.getByTestId('panels')).toBeTruthy())
     expect(screen.getByText(/sem vértice no pregão anterior/)).toBeTruthy()
     expect(screen.queryByText(/0,00%/)).toBeNull()
+    expect(screen.queryByText(/0,000%/)).toBeNull()
   })
 
   it('estado de erro com retry', async () => {

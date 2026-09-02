@@ -4,14 +4,19 @@ const MINUS = '\u2212' // sinal tipográfico, distinto do '-' dos cards
 
 function chipText(bucket: string, deltaPb: number | null | undefined) {
   if (deltaPb == null) return null
-  const rounded = Math.round(deltaPb)
-  const sign = rounded > 0 ? '+' : rounded < 0 ? MINUS : ''
-  const cls = rounded > 0 ? 'up' : rounded < 0 ? 'down' : ''
+  // 1 casa decimal: Math.round inteiro escondia movimentos sub-1pb
+  // (ex.: +0,1 virava "0 pb" cinza, enquanto a tabela mostrava o Δ real).
+  // Sinal/cor vêm do valor original para não neutralizar poeira direcional.
+  const shown = Math.round(deltaPb * 10) / 10
+  const sign = deltaPb > 0 ? '+' : deltaPb < 0 ? MINUS : ''
+  const cls = deltaPb > 0 ? 'up' : deltaPb < 0 ? 'down' : ''
+  const dot = deltaPb > 0 ? '#ea580c' : deltaPb < 0 ? '#16a34a' : '#a3a3a3'
+  const num = Number.isInteger(shown) ? String(Math.abs(shown)) : String(Math.abs(shown)).replace('.', ',')
   return (
     <div className="chip" key={bucket}>
-      <span className="chip-dot" style={{ background: rounded > 0 ? '#ea580c' : rounded < 0 ? '#16a34a' : '#a3a3a3' }} />
+      <span className="chip-dot" style={{ background: dot }} />
       <span>
-        {bucket} <span className={cls}>{`${sign}${Math.abs(rounded)} pb`}</span>
+        {bucket} <span className={cls}>{`${sign}${num} pb`}</span>
       </span>
     </div>
   )
