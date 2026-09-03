@@ -17,6 +17,10 @@
   --color-soft-mint: #dcfce7;
   --color-vivid-green: #16a34a;
   --color-tangerine: #ea580c;
+  --color-amber-bg: #fffbeb;
+  --color-amber-border: #fde68a;
+  --color-rose-bg: #fef2f2;
+  --color-rose-border: #fecaca;
 
   --font-satoshi: 'Satoshi', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
     'Segoe UI', Roboto, sans-serif;
@@ -72,8 +76,9 @@ body {
 .brand-name { font-size: 15px; font-weight: 500; letter-spacing: -0.01em; }
 .brand-divider { width: 1px; height: 16px; background: var(--color-ash); }
 .brand-sub { font-family: var(--font-geist-mono); font-size: 12px; color: var(--color-fog); }
-.header-controls { display: flex; align-items: center; gap: 8px; }
-.select-field {
+.header-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.select-field,
+.date-field {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -82,9 +87,11 @@ body {
   background: #fff;
   border: 1px solid var(--color-ash);
   border-radius: 8px;
+  transition: border-color 150ms ease;
 }
-.select-field:hover { border-color: var(--color-smoke); }
-.select-field > span:first-child { font-size: 12px; color: var(--color-fog); }
+.select-field:hover, .date-field:hover { border-color: var(--color-smoke); }
+.select-field > span:first-child,
+.date-field > span:first-child { font-size: 12px; color: var(--color-fog); }
 .select-field select {
   border: none;
   background: transparent;
@@ -93,9 +100,55 @@ body {
   color: var(--color-charcoal);
   cursor: pointer;
 }
-.select-field:focus-within { border-color: var(--color-electric-blue); }
-.select-field select:focus { outline: none; }
-.select-field select:focus-visible { outline: 2px solid var(--color-electric-blue); outline-offset: 2px; }
+.date-field input[type='date'] {
+  border: none;
+  background: transparent;
+  font-family: var(--font-geist-mono);
+  font-size: 13px;
+  color: var(--color-charcoal);
+  color-scheme: light;
+  cursor: pointer;
+  padding: 0;
+}
+.select-field:focus-within, .date-field:focus-within { border-color: var(--color-electric-blue); }
+.select-field select:focus, .date-field input:focus { outline: none; }
+.select-field select:focus-visible,
+.date-field input:focus-visible { outline: 2px solid var(--color-electric-blue); outline-offset: 2px; }
+/* Navegação entre pregões: mesmo vocabulário do .select-field (32px, ash, radius 8). */
+.date-nav { display: flex; align-items: center; gap: 4px; }
+.date-step {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  border: 1px solid var(--color-ash);
+  border-radius: 8px;
+  color: var(--color-steel);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background-color 150ms ease, border-color 150ms ease;
+}
+.date-step:hover:not(:disabled) { border-color: var(--color-smoke); background: var(--color-paper-mist); }
+.date-step:disabled { opacity: 0.4; cursor: not-allowed; }
+.date-step:focus-visible { outline: 2px solid var(--color-electric-blue); outline-offset: 2px; }
+.btn-ghost {
+  height: 32px;
+  padding: 0 14px;
+  background: #fff;
+  color: var(--color-charcoal);
+  border: 1px solid var(--color-ash);
+  border-radius: 8px;
+  font-family: var(--font-inter);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 150ms ease, border-color 150ms ease;
+}
+.btn-ghost:hover:not(:disabled) { border-color: var(--color-smoke); background: var(--color-paper-mist); }
+.btn-ghost:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-ghost:focus-visible { outline: 2px solid var(--color-electric-blue); outline-offset: 2px; }
 .btn-dark {
   height: 32px;
   padding: 0 14px;
@@ -111,6 +164,7 @@ body {
   display: inline-flex;
   align-items: center;
   box-shadow: rgba(0, 0, 0, 0.05) 0px 1px 2px 0px;
+  transition: background-color 150ms ease;
 }
 .btn-dark:hover { background: var(--color-charcoal); }
 
@@ -219,6 +273,7 @@ body {
   cursor: pointer;
   user-select: none;
   white-space: nowrap;
+  transition: border-color 150ms ease;
 }
 .toggle-field:hover { border-color: var(--color-smoke); }
 .toggle-field input { accent-color: var(--color-electric-blue); margin: 0; cursor: pointer; }
@@ -316,6 +371,7 @@ body {
   font-size: 13px;
   color: var(--color-steel);
 }
+.points-table tbody tr { transition: background-color 150ms ease; }
 .points-table tbody tr:hover { background: #fafafa; }
 .points-table .cell-mono {
   font-family: var(--font-geist-mono);
@@ -339,7 +395,7 @@ body {
 /* Neutro, não verde: com a coluna Δ pb agora colorida, uma coluna inteira de pílulas
    verdes ao lado lia como sinal de queda. Verde significa só "queda de taxa". */
 .badge-contract { background: var(--color-paper-mist); }
-.badge-interp { background: var(--color-paper-mist); }
+.badge-interp { background: var(--color-paper-mist); border: 1px dashed var(--color-smoke); }
 .footnote {
   margin: 24px 0 0;
   font-family: var(--font-geist-mono);
@@ -349,8 +405,8 @@ body {
 
 /* ---------- Estados ---------- */
 .stale-banner {
-  background: #fffbeb;
-  border: 1px solid #fde68a;
+  background: var(--color-amber-bg);
+  border: 1px solid var(--color-amber-border);
   padding: 8px 12px;
   border-radius: 8px;
   margin-bottom: 16px;
@@ -381,11 +437,23 @@ body {
   font-weight: 500;
   cursor: pointer;
 }
-.error-box { border: 1px solid #fecaca; background: #fef2f2; }
+.error-box { border: 1px solid var(--color-rose-border); background: var(--color-rose-bg); }
 .empty-box { border: 1px solid var(--color-ash); background: var(--color-paper-mist); }
 .skeleton { max-width: 1200px; margin: 0 auto; padding: 48px 32px; }
-.skeleton .sk-line { height: 14px; background: var(--color-ash); border-radius: 6px; margin: 12px 0; }
-.skeleton .sk-chart { height: 300px; background: var(--color-paper-mist); border-radius: 16px; margin: 20px 0; }
+.skeleton .sk-line { height: 14px; border-radius: 6px; margin: 12px 0; }
+.skeleton .sk-chart { height: 300px; border-radius: 16px; margin: 20px 0; }
+.skeleton .sk-line, .skeleton .sk-chart {
+  background: linear-gradient(90deg, var(--color-ash) 25%, var(--color-paper-mist) 50%, var(--color-ash) 75%);
+  background-size: 200% 100%;
+  animation: sk-shimmer 1.6s linear infinite;
+}
+@keyframes sk-shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton .sk-line, .skeleton .sk-chart { animation: none; }
+}
 
 /* ---------- Responsivo ---------- */
 @media (max-width: 900px) {

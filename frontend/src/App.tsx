@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api, Curve, Compare } from './api'
+import { snapToTradeDate } from './dateNav'
 import Header from './Header'
 import Hero from './Hero'
 import KpiStrip from './KpiStrip'
@@ -22,6 +23,7 @@ function Skeleton() {
 export default function App() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [showRef, setShowRef] = useState(false)
+  const [snapNotice, setSnapNotice] = useState<string | null>(null)
 
   const datesQ = useQuery({ queryKey: ['dates'], queryFn: () => api.dates() })
   const curveQ = useQuery({
@@ -40,6 +42,23 @@ export default function App() {
   const compare: Compare | undefined = compareQ.data
   const macro = macroQ.data
   const dates = useMemo(() => datesQ.data?.dates ?? [], [datesQ.data])
+
+  // Calendário aceita qualquer dia; sem pregão (fim de semana/feriado), o
+  // snap cai no pregão anterior mais próximo e avisa em vez de dar 404.
+  const handleDateChange = (raw: string) => {
+    if (!raw) {
+      setSelectedDate(null)
+      setSnapNotice(null)
+      return
+    }
+    const { date, snapped } = snapToTradeDate(dates, raw)
+    setSelectedDate(date)
+    setSnapNotice(snapped ? `Sem pregão em ${raw}; mostrando ${date}.` : null)
+  }
+  const handleLatest = () => {
+    setSelectedDate(null)
+    setSnapNotice(null)
+  }
 
   // "Semana anterior" = pregão mais recente com pelo menos 7 dias corridos de defasagem.
   // Escolhido a partir da lista de datas existentes (desc), nunca por aritmética de data:
@@ -67,7 +86,7 @@ export default function App() {
         <Header
           dates={datesQ.data?.dates ?? []}
           selectedDate={selectedDate ?? undefined}
-          onDateChange={setSelectedDate}
+          onDateChange={handleDateChange} onLatest={handleLatest}
           csvHref={api.exportCsvUrl(undefined)}
         />
         <div className="error-box" data-testid="error-state">
@@ -89,7 +108,7 @@ export default function App() {
         <Header
           dates={datesQ.data?.dates ?? []}
           selectedDate={selectedDate ?? curve.trade_date}
-          onDateChange={setSelectedDate}
+          onDateChange={handleDateChange} onLatest={handleLatest}
           csvHref={api.exportCsvUrl(curve.trade_date)}
         />
         <div className="empty-box" data-testid="empty-state">
@@ -106,7 +125,7 @@ export default function App() {
       <Header
         dates={datesQ.data?.dates ?? []}
         selectedDate={selectedDate ?? curve?.trade_date}
-        onDateChange={setSelectedDate}
+        onDateChange={handleDateChange} onLatest={handleLatest}
         csvHref={api.exportCsvUrl(curve?.trade_date)}
       />
 
@@ -116,6 +135,12 @@ export default function App() {
         {curveQ.isFetching && !curveQ.isLoading && (
           <div className="stale-banner" data-testid="stale-banner">
             Atualizando. Os números na tela ainda são da carga anterior.
+          </div>
+        )}
+
+        {snapNotice && (
+          <div className="stale-banner" data-testid="snap-notice">
+            {snapNotice}
           </div>
         )}
 

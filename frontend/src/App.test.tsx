@@ -152,7 +152,7 @@ describe('App', () => {
     await waitFor(() => expect(document.querySelector('[data-testid="ref-line"]')).toBeTruthy())
 
     // 2026-08-13 é o pregão mais antigo: não existe nenhum 7+ dias antes dele.
-    fireEvent.change(screen.getByRole('combobox'), { target: { value: '2026-08-13' } })
+    fireEvent.change(screen.getByLabelText('Pregão'), { target: { value: '2026-08-13' } })
 
     await waitFor(() => {
       const t = screen.getByLabelText('Semana anterior') as HTMLInputElement
@@ -223,6 +223,81 @@ describe('App', () => {
     expect(screen.getByText(/sem vértice no pregão anterior/)).toBeTruthy()
     expect(screen.queryByText(/0,00%/)).toBeNull()
     expect(screen.queryByText(/0,000%/)).toBeNull()
+  })
+
+  it('data sem pregão faz snap para o anterior com aviso', async () => {
+    // 2026-08-19 (quarta) não está no histórico -> cai no pregão mais
+    // próximo para trás (2026-08-20) e avisa, em vez de 404.
+    const curve20 = { ...curve, trade_date: '2026-08-20' }
+    vi.spyOn(apiMod.api, 'latest').mockResolvedValue(curve)
+    vi.spyOn(apiMod.api, 'dates').mockResolvedValue({ dates: ['2026-08-21', '2026-08-20'] })
+    const byDate = vi.spyOn(apiMod.api, 'byDate').mockImplementation(async (d: string) =>
+      d === '2026-08-20' ? curve20 : curve,
+    )
+    vi.spyOn(apiMod.api, 'compare').mockResolvedValue(compare)
+    vi.spyOn(apiMod.api, 'macro').mockResolvedValue({ ref_date: '2026-08-21', indicators: {} })
+    render(
+      <QueryClientProvider client={makeClient()}>
+        <App />
+      </QueryClientProvider>,
+    )
+    await waitFor(() => expect(screen.getByTestId('curve-chart')).toBeTruthy())
+
+    fireEvent.change(screen.getByLabelText('Pregão'), { target: { value: '2026-08-19' } })
+
+    await waitFor(() => expect(byDate).toHaveBeenCalledWith('2026-08-20'))
+    expect(screen.getByTestId('snap-notice').textContent).toContain('2026-08-19')
+    expect(screen.getByTestId('snap-notice').textContent).toContain('2026-08-20')
+  })
+
+  it('botões ◀ ▶ navegam entre pregões', async () => {
+    const curve20 = { ...curve, trade_date: '2026-08-20' }
+    vi.spyOn(apiMod.api, 'latest').mockResolvedValue(curve)
+    vi.spyOn(apiMod.api, 'dates').mockResolvedValue({ dates: ['2026-08-21', '2026-08-20'] })
+    const byDate = vi.spyOn(apiMod.api, 'byDate').mockImplementation(async (d: string) =>
+      d === '2026-08-20' ? curve20 : curve,
+    )
+    vi.spyOn(apiMod.api, 'compare').mockResolvedValue(compare)
+    vi.spyOn(apiMod.api, 'macro').mockResolvedValue({ ref_date: '2026-08-21', indicators: {} })
+    render(
+      <QueryClientProvider client={makeClient()}>
+        <App />
+      </QueryClientProvider>,
+    )
+    await waitFor(() => expect(screen.getByTestId('curve-chart')).toBeTruthy())
+
+    fireEvent.click(screen.getByLabelText('Pregão anterior'))
+    await waitFor(() => expect(byDate).toHaveBeenCalledWith('2026-08-20'))
+    await waitFor(() =>
+      expect(document.querySelector('.vertices-head .mono')?.textContent).toContain('2026-08-20'),
+    )
+  })
+
+  it('Último pregão volta ao latest após navegar', async () => {
+    const curve20 = { ...curve, trade_date: '2026-08-20' }
+    vi.spyOn(apiMod.api, 'latest').mockResolvedValue(curve)
+    vi.spyOn(apiMod.api, 'dates').mockResolvedValue({ dates: ['2026-08-21', '2026-08-20'] })
+    vi.spyOn(apiMod.api, 'byDate').mockImplementation(async (d: string) =>
+      d === '2026-08-20' ? curve20 : curve,
+    )
+    vi.spyOn(apiMod.api, 'compare').mockResolvedValue(compare)
+    vi.spyOn(apiMod.api, 'macro').mockResolvedValue({ ref_date: '2026-08-21', indicators: {} })
+    render(
+      <QueryClientProvider client={makeClient()}>
+        <App />
+      </QueryClientProvider>,
+    )
+    await waitFor(() => expect(screen.getByTestId('curve-chart')).toBeTruthy())
+
+    fireEvent.click(screen.getByLabelText('Pregão anterior'))
+    await waitFor(() =>
+      expect(document.querySelector('.vertices-head .mono')?.textContent).toContain('2026-08-20'),
+    )
+    fireEvent.click(screen.getByText('Último pregão'))
+    await waitFor(() =>
+      expect(document.querySelector('.vertices-head .mono')?.textContent).toContain('2026-08-21'),
+    )
+    expect(screen.getByText('Último pregão')).toBeDisabled()
   })
 
   it('estado de erro com retry', async () => {
