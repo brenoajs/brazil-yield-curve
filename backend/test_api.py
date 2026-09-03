@@ -432,3 +432,86 @@ def test_b3_official_integration_recent_session():
     assert len(curve.points) >= 10
     for p in curve.points:
         assert 0 < p.rate < 0.50
+
+
+# ---------- Fase 3: seed resiliente (retry + skip + commit por dia) ----------
+
+def _flaky_db(tmp_path):
+    from models import init_db, make_engine, make_session_factory
+    db_url = f"sqlite:///{tmp_path}/byc.db"
+    engine = make_engine(db_url)
+    init_db(engine)
+    return make_session_factory(engine)
+
+
+def test_seed_history_retries_transient_b3_error(tmp_path, monkeypatch):
+    """Timeout transitório na B3 não aborta a carga: retry e segue."""
+    import ingestor
+    from sources import MockB3Source, MockBCBSource
+
+    monkeypatch.setattr(ingestor, "FETCH_BACKOFF_S", (0, 0, 0, 0))
+    mock_b3 = MockB3Source()
+    calls = {"n": 0}
+
+    class FlakyB3:
+        def fetch_curve(self, trade_date):
+            calls["n"] += 1
+            if calls["n"] <= 2:
+                raise httpx.ReadTimeout("boom")
+            return mock_b3.fetch_curve(trade_date)
+
+    monkeypatch.setattr(ingestor, "_resolve_source",
+                        lambda source: (FlakyB3(), MockBCBSource(), "test"))
+    with _flaky_db(tmp_path)() as session:
+        # 28/08/2026 = sexta; days=2 pega 28 + 27 (quinta)
+        seeded = seed_history(session, days=2, end_date=dt.date(2026, 8, 28))
+    assert seeded == [dt.date(2026, 8, 27), dt.date(2026, 8, 28)]
+    assert calls["n"] >= 4  # 2 falhas + retentativas + sucessos
+
+
+def test_seed_history_skips_day_after_retries_exhausted(tmp_path, monkeypatch):
+    """Dia com falha persistente é pulado com log; os demais carregam."""
+    import ingestor
+    from sources import MockB3Source, MockBCBSource
+
+    monkeypatch.setattr(ingestor, "FETCH_BACKOFF_S", (0, 0, 0, 0))
+    mock_b3 = MockB3Source()
+    bad = dt.date(2026, 8, 28)
+
+    class Boom28:
+        def fetch_curve(self, trade_date):
+            if trade_date == bad:
+                raise httpx.ConnectError("down")
+            return mock_b3.fetch_curve(trade_date)
+
+    monkeypatch.setattr(ingestor, "_resolve_source",
+                        lambda source: (Boom28(), MockBCBSource(), "test"))
+    with _flaky_db(tmp_path)() as session:
+        seeded = seed_history(session, days=1, end_date=bad)
+    assert seeded == [dt.date(2026, 8, 27)]
+
+
+def test_ingest_macro_retries_transient_error(tmp_path, monkeypatch):
+    """Timeout no SGS não perde a curva do dia: retry do fetch macro."""
+    import ingestor
+    from ingestor import ingest_macro
+    from models import MacroIndicator
+    from sources import MockBCBSource
+    from sqlalchemy import select
+
+    monkeypatch.setattr(ingestor, "FETCH_BACKOFF_S", (0, 0, 0, 0))
+    real = MockBCBSource()
+    calls = {"n": 0}
+
+    class FlakyBCB:
+        def fetch_macro(self, ref_date):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise httpx.ReadTimeout("boom")
+            return real.fetch_macro(ref_date)
+
+    with _flaky_db(tmp_path)() as session:
+        ingest_macro(session, FlakyBCB(), dt.date(2026, 8, 28))
+        rows = session.execute(select(MacroIndicator)).scalars().all()
+    assert calls["n"] == 2
+    assert {r.indicator_code for r in rows} == {"432", "1178", "13522", "1"}
