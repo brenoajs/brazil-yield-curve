@@ -118,17 +118,109 @@ describe('App', () => {
     await waitFor(() => expect(screen.getByTestId('curve-chart')).toBeTruthy())
 
     // desligado por padrão: nenhuma série de referência
-    expect(document.querySelector('[data-testid="ref-line"]')).toBeNull()
+    expect(document.querySelector('[data-testid="ref-line-week"]')).toBeNull()
 
     fireEvent.click(screen.getByLabelText('Semana anterior'))
 
-    await waitFor(() => expect(document.querySelector('[data-testid="ref-line"]')).toBeTruthy())
+    await waitFor(() => expect(document.querySelector('[data-testid="ref-line-week"]')).toBeTruthy())
     expect(byDate).toHaveBeenCalledWith('2026-08-14')
     // a legenda mostra a data resolvida, não um "semana anterior" genérico
-    expect(screen.getByTestId('ref-legend').textContent).toContain('2026-08-14')
+    expect(screen.getByTestId('ref-legend-week').textContent).toContain('2026-08-14')
     // tooltip do ponto atual ganha o delta em pb contra a referência
     const titles = document.querySelectorAll('svg title')
     expect(titles[0].textContent).toContain('+25 pb')
+  })
+
+  it('toggle "mês anterior" plota a curva de 30+ dias atrás', async () => {
+    // 2026-07-21 é o pregão mais recente com 30+ dias corridos de defasagem de 2026-08-21.
+    const monthAgo: apiMod.Curve = {
+      trade_date: '2026-07-21',
+      curve_type: 'DI_FUTURE',
+      points: [
+        { vertex_label: '3m', maturity_date: '2026-11-21', rate: 0.1015, interpolated: false, liquidity_note: null },
+        { vertex_label: '6m', maturity_date: '2027-02-21', rate: 0.102, interpolated: false, liquidity_note: null },
+      ],
+    }
+    vi.spyOn(apiMod.api, 'latest').mockResolvedValue(curve)
+    vi.spyOn(apiMod.api, 'dates').mockResolvedValue({
+      dates: ['2026-08-21', '2026-08-20', '2026-07-21', '2026-07-20'],
+    })
+    vi.spyOn(apiMod.api, 'compare').mockResolvedValue(compare)
+    vi.spyOn(apiMod.api, 'macro').mockResolvedValue({ ref_date: '2026-08-21', indicators: {} })
+    const byDate = vi.spyOn(apiMod.api, 'byDate').mockResolvedValue(monthAgo)
+
+    render(
+      <QueryClientProvider client={makeClient()}>
+        <App />
+      </QueryClientProvider>,
+    )
+    await waitFor(() => expect(screen.getByTestId('curve-chart')).toBeTruthy())
+
+    expect(document.querySelector('[data-testid="ref-line-month"]')).toBeNull()
+
+    fireEvent.click(screen.getByLabelText('Mês anterior'))
+
+    await waitFor(() => expect(document.querySelector('[data-testid="ref-line-month"]')).toBeTruthy())
+    expect(byDate).toHaveBeenCalledWith('2026-07-21')
+    expect(screen.getByTestId('ref-legend-month').textContent).toContain('2026-07-21')
+    const titles = document.querySelectorAll('svg title')
+    expect(titles[0].textContent).toContain('mês ant.')
+    expect(titles[0].textContent).toContain('+25 pb')
+  })
+
+  it('semana e mês anterior ligadas plotam as duas linhas', async () => {
+    const refCurve: apiMod.Curve = {
+      trade_date: '2026-08-14',
+      curve_type: 'DI_FUTURE',
+      points: [
+        { vertex_label: '3m', maturity_date: '2026-11-21', rate: 0.1015, interpolated: false, liquidity_note: null },
+        { vertex_label: '6m', maturity_date: '2027-02-21', rate: 0.102, interpolated: false, liquidity_note: null },
+      ],
+    }
+    const monthAgo: apiMod.Curve = { ...refCurve, trade_date: '2026-07-21' }
+    vi.spyOn(apiMod.api, 'latest').mockResolvedValue(curve)
+    vi.spyOn(apiMod.api, 'dates').mockResolvedValue({
+      dates: ['2026-08-21', '2026-08-20', '2026-08-14', '2026-07-21'],
+    })
+    vi.spyOn(apiMod.api, 'compare').mockResolvedValue(compare)
+    vi.spyOn(apiMod.api, 'macro').mockResolvedValue({ ref_date: '2026-08-21', indicators: {} })
+    vi.spyOn(apiMod.api, 'byDate').mockImplementation(async (d: string) =>
+      d === '2026-07-21' ? monthAgo : refCurve,
+    )
+
+    render(
+      <QueryClientProvider client={makeClient()}>
+        <App />
+      </QueryClientProvider>,
+    )
+    await waitFor(() => expect(screen.getByTestId('curve-chart')).toBeTruthy())
+
+    fireEvent.click(screen.getByLabelText('Semana anterior'))
+    fireEvent.click(screen.getByLabelText('Mês anterior'))
+
+    await waitFor(() => expect(document.querySelector('[data-testid="ref-line-week"]')).toBeTruthy())
+    await waitFor(() => expect(document.querySelector('[data-testid="ref-line-month"]')).toBeTruthy())
+    const titles = document.querySelectorAll('svg title')
+    expect(titles[0].textContent).toContain('sem. ant.')
+    expect(titles[0].textContent).toContain('mês ant.')
+  })
+
+  it('toggle do mês desabilitado sem pregão 30+ dias antes', async () => {
+    vi.spyOn(apiMod.api, 'latest').mockResolvedValue(curve)
+    vi.spyOn(apiMod.api, 'dates').mockResolvedValue({ dates: ['2026-08-21', '2026-08-20'] })
+    vi.spyOn(apiMod.api, 'compare').mockResolvedValue(compare)
+    vi.spyOn(apiMod.api, 'macro').mockResolvedValue({ ref_date: '2026-08-21', indicators: {} })
+    const byDate = vi.spyOn(apiMod.api, 'byDate').mockResolvedValue(curve)
+
+    render(
+      <QueryClientProvider client={makeClient()}>
+        <App />
+      </QueryClientProvider>,
+    )
+    await waitFor(() => expect(screen.getByTestId('curve-chart')).toBeTruthy())
+
+    expect(screen.getByLabelText('Mês anterior') as HTMLInputElement).toBeDisabled()
+    expect(byDate).not.toHaveBeenCalled()
   })
 
   it('ao trocar para pregão sem referência, o toggle não fica marcado-e-desabilitado', async () => {
@@ -149,7 +241,7 @@ describe('App', () => {
     await waitFor(() => expect(screen.getByTestId('curve-chart')).toBeTruthy())
 
     fireEvent.click(screen.getByLabelText('Semana anterior'))
-    await waitFor(() => expect(document.querySelector('[data-testid="ref-line"]')).toBeTruthy())
+    await waitFor(() => expect(document.querySelector('[data-testid="ref-line-week"]')).toBeTruthy())
 
     // 2026-08-13 é o pregão mais antigo: não existe nenhum 7+ dias antes dele.
     fireEvent.change(screen.getByLabelText('Pregão'), { target: { value: '2026-08-13' } })
@@ -159,7 +251,7 @@ describe('App', () => {
       expect(t.disabled).toBe(true)
       expect(t.checked).toBe(false)
     })
-    expect(document.querySelector('[data-testid="ref-line"]')).toBeNull()
+    expect(document.querySelector('[data-testid="ref-line-week"]')).toBeNull()
   })
 
   it('toggle desabilitado quando não há pregão 7+ dias antes', async () => {

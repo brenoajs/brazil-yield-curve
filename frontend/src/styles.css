@@ -261,6 +261,11 @@ body {
   height: 0;
   border-top: 1.75px dashed var(--color-silver);
 }
+.legend-dots {
+  width: 14px;
+  height: 0;
+  border-top: 2px dotted var(--color-fog);
+}
 .toggle-field {
   display: flex;
   align-items: center;

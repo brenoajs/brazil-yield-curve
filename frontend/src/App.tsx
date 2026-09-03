@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api, Curve, Compare } from './api'
-import { snapToTradeDate } from './dateNav'
+import { latestBefore, snapToTradeDate } from './dateNav'
 import Header from './Header'
 import Hero from './Hero'
 import KpiStrip from './KpiStrip'
-import CurveChart from './CurveChart'
+import CurveChart, { ChartReference } from './CurveChart'
 import Panels from './Panels'
 import VerticesTable from './VerticesTable'
 
@@ -22,7 +22,7 @@ function Skeleton() {
 
 export default function App() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
-  const [showRef, setShowRef] = useState(false)
+  const [showRefs, setShowRefs] = useState({ week: false, month: false })
   const [snapNotice, setSnapNotice] = useState<string | null>(null)
 
   const datesQ = useQuery({ queryKey: ['dates'], queryFn: () => api.dates() })
@@ -60,22 +60,46 @@ export default function App() {
     setSnapNotice(null)
   }
 
-  // "Semana anterior" = pregão mais recente com pelo menos 7 dias corridos de defasagem.
-  // Escolhido a partir da lista de datas existentes (desc), nunca por aritmética de data:
-  // GET /curves/{date} responde 404 para um dia sem pregão.
-  const refDate = useMemo(() => {
-    if (!curve?.trade_date) return null
-    const cutoff = new Date(Date.parse(curve.trade_date) - 7 * 864e5).toISOString().slice(0, 10)
-    return dates.find((d) => d <= cutoff) ?? null
-  }, [curve?.trade_date, dates])
+  // Referências sobrepostas ("semana/mês anterior") = pregão mais recente com
+  // pelo menos N dias corridos de defasagem. Escolhidas da lista existente
+  // (desc), nunca por aritmética de data: GET /curves/{date} dá 404 sem pregão.
+  const weekDate = useMemo(
+    () => (curve?.trade_date ? latestBefore(dates, curve.trade_date, 7) : null),
+    [curve?.trade_date, dates],
+  )
+  const monthDate = useMemo(
+    () => (curve?.trade_date ? latestBefore(dates, curve.trade_date, 30) : null),
+    [curve?.trade_date, dates],
+  )
 
-  const refCurveQ = useQuery({
-    queryKey: ['curve-ref', refDate],
-    queryFn: () => api.byDate(refDate as string),
-    enabled: showRef && !!refDate,
+  const weekCurveQ = useQuery({
+    queryKey: ['curve-ref-week', weekDate],
+    queryFn: () => api.byDate(weekDate as string),
+    enabled: showRefs.week && !!weekDate,
     placeholderData: (prev) => prev,
   })
-  const refCurve = showRef && refDate ? refCurveQ.data : undefined
+  const monthCurveQ = useQuery({
+    queryKey: ['curve-ref-month', monthDate],
+    queryFn: () => api.byDate(monthDate as string),
+    enabled: showRefs.month && !!monthDate,
+    placeholderData: (prev) => prev,
+  })
+  const toggleReference = (key: string, value: boolean) =>
+    setShowRefs((s) => ({ ...s, [key]: value }))
+  const references: ChartReference[] = [
+    {
+      key: 'week', label: 'Semana anterior', short: 'sem. ant.', against: 'a semana anterior',
+      lagDays: 7, date: weekDate,
+      curve: showRefs.week && weekDate ? weekCurveQ.data : undefined,
+      enabled: showRefs.week,
+    },
+    {
+      key: 'month', label: 'Mês anterior', short: 'mês ant.', against: 'o mês anterior',
+      lagDays: 30, date: monthDate,
+      curve: showRefs.month && monthDate ? monthCurveQ.data : undefined,
+      enabled: showRefs.month,
+    },
+  ]
 
   if (curveQ.isLoading) return <Skeleton />
 
@@ -150,10 +174,8 @@ export default function App() {
           <div className="content-grid">
             <CurveChart
               curve={curve}
-              refCurve={refCurve}
-              refDate={refDate}
-              showRef={showRef}
-              onToggleRef={setShowRef}
+              references={references}
+              onToggleReference={toggleReference}
             />
             <Panels compare={compare} />
           </div>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { hasTradeDate, nextTradeDate, prevTradeDate, snapToTradeDate } from './dateNav'
+import { hasTradeDate, latestBefore, nextTradeDate, prevTradeDate, snapToTradeDate } from './dateNav'
 
 // dates em ordem decrescente, como vem de /curves/dates.
 const DATES = ['2026-08-26', '2026-08-25', '2026-08-24', '2026-08-21', '2026-08-20']
@@ -26,8 +26,7 @@ describe('snapToTradeDate', () => {
   })
 })
 
-describe('prevTradeDate / nextTradeDate', () => {
-  it('◀ volta um pregão, ▶ avança um pregão', () => {
+describe('prevTradeDate / nextTradeDate', () => {  it('◀ volta um pregão, ▶ avança um pregão', () => {
     expect(prevTradeDate(DATES, '2026-08-25')).toBe('2026-08-24')
     expect(nextTradeDate(DATES, '2026-08-25')).toBe('2026-08-26')
   })
@@ -35,5 +34,24 @@ describe('prevTradeDate / nextTradeDate', () => {
   it('nas bordas retorna null (botão desabilita)', () => {
     expect(prevTradeDate(DATES, '2026-08-20')).toBeNull()
     expect(nextTradeDate(DATES, '2026-08-26')).toBeNull()
+  })
+})
+
+describe('latestBefore', () => {
+  // mesma regra do toggle "semana anterior": pregão mais recente com pelo
+  // menos `lagDays` corridos de defasagem — nunca aritmética de data.
+  const HIST = ['2026-08-21', '2026-08-20', '2026-08-14', '2026-08-13', '2026-07-21', '2026-07-20']
+
+  it('lag 7 dias acha o pregão da semana anterior', () => {
+    expect(latestBefore(HIST, '2026-08-21', 7)).toBe('2026-08-14')
+  })
+
+  it('lag 30 dias acha o pregão do mês anterior', () => {
+    expect(latestBefore(HIST, '2026-08-21', 30)).toBe('2026-07-21')
+  })
+
+  it('sem histórico suficiente retorna null', () => {
+    expect(latestBefore(['2026-08-21', '2026-08-20'], '2026-08-21', 30)).toBeNull()
+    expect(latestBefore([], '2026-08-21', 7)).toBeNull()
   })
 })

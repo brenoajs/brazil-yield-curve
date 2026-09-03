@@ -16,6 +16,16 @@ export function snapToTradeDate(dates: string[], raw: string): { date: string; s
   return { date: dates[dates.length - 1], snapped: true }
 }
 
+// Pregão mais recente com pelo menos `lagDays` corridos de defasagem de
+// `current` (regra dos toggles "semana/mês anterior"). Escolhido a partir da
+// lista existente (desc), nunca por aritmética de data: dias sem pregão não
+// existem como arquivo. null = sem histórico suficiente.
+export function latestBefore(dates: string[], current: string, lagDays: number): string | null {
+  if (dates.length === 0) return null
+  const cutoff = new Date(Date.parse(current) - lagDays * 864e5).toISOString().slice(0, 10)
+  return dates.find((d) => d <= cutoff) ?? null
+}
+
 // Pregão imediatamente anterior (mais antigo). null na borda.
 export function prevTradeDate(dates: string[], current: string): string | null {
   const i = dates.indexOf(current)
