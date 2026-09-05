@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api, Curve, Compare } from './api'
 import { latestBefore, snapToTradeDate } from './dateNav'
+import { buildCustomCompare } from './customCompare'
 import Header from './Header'
 import Hero from './Hero'
 import KpiStrip from './KpiStrip'
@@ -22,8 +23,12 @@ function Skeleton() {
 
 export default function App() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
-  const [showRefs, setShowRefs] = useState({ week: false, month: false })
+  const [showRefs, setShowRefs] = useState({ week: false, month: false, custom: false } as Record<string, boolean>)
   const [snapNotice, setSnapNotice] = useState<string | null>(null)
+  const [customInput, setCustomInput] = useState('')
+  const [customDate, setCustomDate] = useState<string | null>(null)
+  const [customSnapNotice, setCustomSnapNotice] = useState<string | null>(null)
+  const [compareMode, setCompareMode] = useState<'previous' | 'custom'>('previous')
 
   const datesQ = useQuery({ queryKey: ['dates'], queryFn: () => api.dates() })
   const curveQ = useQuery({
@@ -60,6 +65,21 @@ export default function App() {
     setSnapNotice(null)
   }
 
+  const handleCustomInputChange = (raw: string) => {
+    setCustomInput(raw)
+    if (!raw) {
+      setCustomDate(null)
+      setCustomSnapNotice(null)
+      setShowRefs((s) => ({ ...s, custom: false }))
+      setCompareMode('previous')
+      return
+    }
+    const { date, snapped } = snapToTradeDate(dates, raw)
+    setCustomDate(date)
+    setCustomSnapNotice(snapped ? `Sem pregão em ${raw}; comparando com ${date}.` : null)
+    setShowRefs((s) => ({ ...s, custom: true }))
+  }
+
   // Referências sobrepostas ("semana/mês anterior") = pregão mais recente com
   // pelo menos N dias corridos de defasagem. Escolhidas da lista existente
   // (desc), nunca por aritmética de data: GET /curves/{date} dá 404 sem pregão.
@@ -84,6 +104,12 @@ export default function App() {
     enabled: showRefs.month && !!monthDate,
     placeholderData: (prev) => prev,
   })
+  const customCurveQ = useQuery({
+    queryKey: ['curve-ref-custom', customDate],
+    queryFn: () => api.byDate(customDate as string),
+    enabled: !!showRefs.custom && !!customDate,
+    placeholderData: (prev) => prev,
+  })
   const toggleReference = (key: string, value: boolean) =>
     setShowRefs((s) => ({ ...s, [key]: value }))
   const references: ChartReference[] = [
@@ -99,7 +125,19 @@ export default function App() {
       curve: showRefs.month && monthDate ? monthCurveQ.data : undefined,
       enabled: showRefs.month,
     },
+    {
+      key: 'custom', label: 'Data específica', short: 'esp.', against: 'a data específica',
+      lagDays: 0, date: customDate,
+      curve: showRefs.custom && customDate ? customCurveQ.data : undefined,
+      enabled: !!showRefs.custom,
+    },
   ]
+
+  const customCompare = useMemo(
+    () => (curve && customCurveQ.data && customDate ? buildCustomCompare(curve, customCurveQ.data) : undefined),
+    [curve, customCurveQ.data, customDate],
+  )
+  const effectiveCompare = compareMode === 'custom' && customCompare ? customCompare : compare
 
   if (curveQ.isLoading) return <Skeleton />
 
@@ -167,21 +205,20 @@ export default function App() {
             {snapNotice}
           </div>
         )}
+        {customSnapNotice && <div className="stale-banner" data-testid="custom-snap-notice">{customSnapNotice}</div>}
 
         <KpiStrip macro={macro} />
 
         {curve && (
           <div className="content-grid">
-            <CurveChart
-              curve={curve}
-              references={references}
-              onToggleReference={toggleReference}
-            />
-            <Panels compare={compare} />
+            <CurveChart curve={curve} references={references} onToggleReference={toggleReference}
+              customInput={customInput} customMax={dates[0] ?? ''} customMin={dates[dates.length - 1] ?? ''}
+              onCustomInputChange={handleCustomInputChange} />
+            <Panels compare={effectiveCompare} baseLabel={compareMode === 'custom' && customDate ? `vs ${customDate}` : undefined} />
           </div>
         )}
 
-        {curve && <VerticesTable curve={curve} compare={compare} />}
+        {curve && <VerticesTable curve={curve} compare={compare} customCompare={customCompare} customDate={customDate} mode={compareMode} onModeChange={setCompareMode} />}
 
         <p className="footnote">Taxas anualizadas em base 252 dias úteis. Alta de taxa em laranja, queda em verde.</p>
       </main>
