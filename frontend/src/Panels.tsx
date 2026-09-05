@@ -8,12 +8,13 @@ const moveText = (d: CompareDelta) =>
   d.previous_rate == null ? `sem vértice no pregão anterior · ${PCT(d.rate)}` : `${PCT(d.previous_rate)} → ${PCT(d.rate)}`
 
 // Cards "Maior alta / Maior queda" (alimentados por compare).
-export default function Panels({ compare }: { compare?: Compare }) {
+export default function Panels({ compare, baseLabel }: { compare?: Compare; baseLabel?: string }) {
   if (!compare) return null
   const { max_up, max_down } = compare
 
   return (
     <div className="side-cards" data-testid="panels">
+      {baseLabel && <span className="mono" style={{ fontSize: 12 }}>{baseLabel}</span>}
       <section className="delta-card">
         <div className="delta-card-head">
           <span className="delta-card-title">Maior alta</span>
