@@ -451,4 +451,17 @@ describe('App', () => {
     // 0.104 vs 0.1015 = +25pb ; 0.1035 vs 0.102 = +15pb
     expect(rows[0].querySelectorAll('td')[3].textContent).toContain('25')
   })
+
+  it('custom igual a principal avisa Δ zerado e fim de semana faz snap', async () => {
+    vi.spyOn(apiMod.api, 'latest').mockResolvedValue(curve)
+    vi.spyOn(apiMod.api, 'dates').mockResolvedValue({ dates: ['2026-08-21', '2026-08-20'] })
+    vi.spyOn(apiMod.api, 'compare').mockResolvedValue(compare)
+    vi.spyOn(apiMod.api, 'macro').mockResolvedValue({ ref_date: '2026-08-21', indicators: {} })
+    const byDate = vi.spyOn(apiMod.api, 'byDate').mockImplementation(async (d: string) => d === '2026-08-20' ? { ...curve, trade_date: '2026-08-20' } : curve)
+    render(<QueryClientProvider client={makeClient()}><App /></QueryClientProvider>)
+    await waitFor(() => expect(screen.getByTestId('curve-chart')).toBeTruthy())
+    fireEvent.change(screen.getByLabelText(/Comparar com/i), { target: { value: '2026-08-19' } })
+    await waitFor(() => expect(screen.getByTestId('custom-snap-notice')).toBeTruthy())
+    expect(byDate).toHaveBeenCalledWith('2026-08-20')
+  })
 })

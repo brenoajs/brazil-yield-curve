@@ -137,7 +137,7 @@ export default function App() {
     () => (curve && customCurveQ.data && customDate ? buildCustomCompare(curve, customCurveQ.data) : undefined),
     [curve, customCurveQ.data, customDate],
   )
-  const effectiveCompare = compareMode === 'custom' && customCompare ? customCompare : compare
+  const effectiveCompare = customCurveQ.isError || compareMode === 'previous' || !customCompare ? compare : customCompare
 
   if (curveQ.isLoading) return <Skeleton />
 
@@ -206,6 +206,7 @@ export default function App() {
           </div>
         )}
         {customSnapNotice && <div className="stale-banner" data-testid="custom-snap-notice">{customSnapNotice}</div>}
+        {customDate && curve && customDate === curve.trade_date && <div className="stale-banner" data-testid="custom-same-notice">Mesma data — Δ zerado.</div>}
 
         <KpiStrip macro={macro} />
 
