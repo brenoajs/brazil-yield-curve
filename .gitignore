@@ -20,5 +20,8 @@ frontend/*.tsbuildinfo
 .DS_Store
 frontend/public/api/
 /docs
-design.md 
+design.md
 deploy_pages.md
+
+# Git worktrees (isolated workspaces)
+.worktrees/
