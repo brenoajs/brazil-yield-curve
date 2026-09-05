@@ -376,6 +376,34 @@ body {
   border-bottom: 1px solid var(--color-ash);
 }
 .vertices-scroll { overflow-x: auto; }
+/* Alternador da base de comparação — mesmo vocabulário dos .toggle-field pills:
+   contorno ash, raio total; segmento ativo em charcoal (o violeta é reservado
+   para a linha custom no gráfico). */
+.mode-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--color-ash);
+  border-radius: 9999px;
+  background: #fff;
+}
+.mode-switch-btn {
+  border: 0;
+  background: transparent;
+  border-radius: 9999px;
+  padding: 4px 10px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-steel);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+.mode-switch-btn:hover { color: var(--color-charcoal); }
+.mode-switch-btn[aria-pressed='true'] { background: var(--color-charcoal); color: #fff; }
+.mode-switch-btn:focus-visible { outline: 2px solid var(--color-electric-blue); outline-offset: 2px; }
 .points-table { width: 100%; min-width: 560px; border-collapse: collapse; }
 .points-table th {
   text-align: left;

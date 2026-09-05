@@ -17,9 +17,9 @@ export default function VerticesTable({ curve, compare, customCompare, customDat
         <h2 className="card-title">Vértices</h2>
         <span className="mono" style={{ fontSize: 12, color: '#737373' }}>{curve.trade_date}</span>
         {customDate && customCompare && (
-          <div role="group" aria-label="Base de comparação">
-            <button type="button" aria-pressed={mode === 'previous'} onClick={() => onModeChange('previous')}>vs anterior</button>
-            <button type="button" aria-pressed={mode === 'custom'} onClick={() => onModeChange('custom')}>vs {customDate}</button>
+          <div className="mode-switch" role="group" aria-label="Base de comparação">
+            <button type="button" className="mode-switch-btn" aria-pressed={mode === 'previous'} onClick={() => onModeChange('previous')}>vs anterior</button>
+            <button type="button" className="mode-switch-btn" aria-pressed={mode === 'custom'} onClick={() => onModeChange('custom')}>vs {customDate}</button>
           </div>
         )}
       </div>

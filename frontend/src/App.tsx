@@ -78,6 +78,9 @@ export default function App() {
     setCustomDate(date)
     setCustomSnapNotice(snapped ? `Sem pregão em ${raw}; comparando com ${date}.` : null)
     setShowRefs((s) => ({ ...s, custom: true }))
+    // O checkbox é o master switch da comparação custom: escolher a data já
+    // alterna tabela e cards junto com a linha violeta.
+    setCompareMode('custom')
   }
 
   // Referências sobrepostas ("semana/mês anterior") = pregão mais recente com
@@ -137,7 +140,12 @@ export default function App() {
     () => (curve && customCurveQ.data && customDate ? buildCustomCompare(curve, customCurveQ.data) : undefined),
     [curve, customCurveQ.data, customDate],
   )
-  const effectiveCompare = customCurveQ.isError || compareMode === 'previous' || !customCompare ? compare : customCompare
+  // Desmarcar o checkbox desliga a comparação custom em tudo (linha, tabela e
+  // cards): o react-query mantém o último dado em cache, então o gate precisa
+  // ser explícito em showRefs.custom, não só na presença dos dados.
+  const customActive = showRefs.custom ? customCompare : undefined
+  const customActiveDate = showRefs.custom ? customDate : null
+  const effectiveCompare = customCurveQ.isError || compareMode === 'previous' || !customActive ? compare : customActive
 
   if (curveQ.isLoading) return <Skeleton />
 
@@ -215,11 +223,11 @@ export default function App() {
             <CurveChart curve={curve} references={references} onToggleReference={toggleReference}
               customInput={customInput} customMax={dates[0] ?? ''} customMin={dates[dates.length - 1] ?? ''}
               onCustomInputChange={handleCustomInputChange} />
-            <Panels compare={effectiveCompare} baseLabel={compareMode === 'custom' && customDate ? `vs ${customDate}` : undefined} />
+            <Panels compare={effectiveCompare} baseLabel={compareMode === 'custom' && customActive && customDate ? `vs ${customDate}` : undefined} />
           </div>
         )}
 
-        {curve && <VerticesTable curve={curve} compare={compare} customCompare={customCompare} customDate={customDate} mode={compareMode} onModeChange={setCompareMode} />}
+        {curve && <VerticesTable curve={curve} compare={compare} customCompare={customActive} customDate={customActiveDate} mode={compareMode} onModeChange={setCompareMode} />}
 
         <p className="footnote">Taxas anualizadas em base 252 dias úteis. Alta de taxa em laranja, queda em verde.</p>
       </main>

@@ -445,11 +445,17 @@ describe('App', () => {
     render(<QueryClientProvider client={makeClient()}><App /></QueryClientProvider>)
     await waitFor(() => expect(screen.getByTestId('points-table')).toBeTruthy())
     fireEvent.change(screen.getByLabelText(/Comparar com/i), { target: { value: '2025-10-01' } })
-    await waitFor(() => expect(screen.getByText(/vs 2025-10-01/)).toBeTruthy())
-    fireEvent.click(screen.getByText(/vs 2025-10-01/))
-    const rows = document.querySelectorAll('[data-testid="points-table"] tbody tr')
-    // 0.104 vs 0.1015 = +25pb ; 0.1035 vs 0.102 = +15pb
-    expect(rows[0].querySelectorAll('td')[3].textContent).toContain('25')
+    // escolher a data já alterna sozinho para Δ custom (0.104 vs 0.1015 = +25pb)
+    await waitFor(() => {
+      const rows = document.querySelectorAll('[data-testid="points-table"] tbody tr')
+      expect(rows[0].querySelectorAll('td')[3].textContent).toContain('25')
+    })
+    // voltar para o anterior pelo segmented control
+    fireEvent.click(screen.getByText('vs anterior'))
+    await waitFor(() => {
+      const rows = document.querySelectorAll('[data-testid="points-table"] tbody tr')
+      expect(rows[0].querySelectorAll('td')[3].textContent).toContain('1,5')
+    })
   })
 
   it('custom igual a principal avisa Δ zerado e fim de semana faz snap', async () => {
@@ -463,5 +469,54 @@ describe('App', () => {
     fireEvent.change(screen.getByLabelText(/Comparar com/i), { target: { value: '2026-08-19' } })
     await waitFor(() => expect(screen.getByTestId('custom-snap-notice')).toBeTruthy())
     expect(byDate).toHaveBeenCalledWith('2026-08-20')
+  })
+
+  it('escolher data especifica ja alterna tabela e cards para Δ custom', async () => {
+    const custom: apiMod.Curve = {
+      trade_date: '2025-10-01', curve_type: 'DI_FUTURE',
+      points: [
+        { vertex_label: '3m', maturity_date: '2026-11-21', rate: 0.1015, interpolated: false, liquidity_note: null },
+        { vertex_label: '6m', maturity_date: '2027-02-21', rate: 0.102, interpolated: false, liquidity_note: null },
+      ],
+    }
+    vi.spyOn(apiMod.api, 'latest').mockResolvedValue(curve)
+    vi.spyOn(apiMod.api, 'dates').mockResolvedValue({ dates: ['2026-08-21', '2025-10-01'] })
+    vi.spyOn(apiMod.api, 'compare').mockResolvedValue(compare)
+    vi.spyOn(apiMod.api, 'macro').mockResolvedValue({ ref_date: '2026-08-21', indicators: {} })
+    vi.spyOn(apiMod.api, 'byDate').mockResolvedValue(custom)
+    render(<QueryClientProvider client={makeClient()}><App /></QueryClientProvider>)
+    await waitFor(() => expect(screen.getByTestId('points-table')).toBeTruthy())
+    fireEvent.change(screen.getByLabelText(/Comparar com/i), { target: { value: '2025-10-01' } })
+    // sem clicar em "vs ...": a tabela acompanha sozinha (0.104 vs 0.1015 = +25pb)
+    await waitFor(() => {
+      const rows = document.querySelectorAll('[data-testid="points-table"] tbody tr')
+      expect(rows[0].querySelectorAll('td')[3].textContent).toContain('25')
+    })
+  })
+
+  it('desmarcar Data especifica devolve tabela e cards para Δ anterior', async () => {
+    const custom: apiMod.Curve = {
+      trade_date: '2025-10-01', curve_type: 'DI_FUTURE',
+      points: [
+        { vertex_label: '3m', maturity_date: '2026-11-21', rate: 0.1015, interpolated: false, liquidity_note: null },
+        { vertex_label: '6m', maturity_date: '2027-02-21', rate: 0.102, interpolated: false, liquidity_note: null },
+      ],
+    }
+    vi.spyOn(apiMod.api, 'latest').mockResolvedValue(curve)
+    vi.spyOn(apiMod.api, 'dates').mockResolvedValue({ dates: ['2026-08-21', '2025-10-01'] })
+    vi.spyOn(apiMod.api, 'compare').mockResolvedValue(compare)
+    vi.spyOn(apiMod.api, 'macro').mockResolvedValue({ ref_date: '2026-08-21', indicators: {} })
+    vi.spyOn(apiMod.api, 'byDate').mockResolvedValue(custom)
+    render(<QueryClientProvider client={makeClient()}><App /></QueryClientProvider>)
+    await waitFor(() => expect(screen.getByTestId('points-table')).toBeTruthy())
+    fireEvent.change(screen.getByLabelText(/Comparar com/i), { target: { value: '2025-10-01' } })
+    await waitFor(() => expect(screen.getByText(/vs 2025-10-01/)).toBeTruthy())
+    fireEvent.click(screen.getByLabelText('Data específica'))
+    // checkbox = master switch: tabela volta ao anterior e o alternador some
+    await waitFor(() => {
+      const rows = document.querySelectorAll('[data-testid="points-table"] tbody tr')
+      expect(rows[0].querySelectorAll('td')[3].textContent).toContain('1,5')
+    })
+    expect(screen.queryByText(/vs 2025-10-01/)).toBeNull()
   })
 })
