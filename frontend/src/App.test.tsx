@@ -405,4 +405,27 @@ describe('App', () => {
     await waitFor(() => expect(screen.getByTestId('error-state')).toBeTruthy())
     expect(screen.getByText(/Tentar novamente/)).toBeTruthy()
   })
+
+  it('comparar com data especifica plota ref-line-custom', async () => {
+    const custom: apiMod.Curve = {
+      trade_date: '2025-10-01',
+      curve_type: 'DI_FUTURE',
+      points: [
+        { vertex_label: '3m', maturity_date: '2026-11-21', rate: 0.1015, interpolated: false, liquidity_note: null },
+        { vertex_label: '6m', maturity_date: '2027-02-21', rate: 0.102, interpolated: false, liquidity_note: null },
+      ],
+    }
+    vi.spyOn(apiMod.api, 'latest').mockResolvedValue(curve)
+    vi.spyOn(apiMod.api, 'dates').mockResolvedValue({ dates: ['2026-08-21', '2025-10-01'] })
+    vi.spyOn(apiMod.api, 'compare').mockResolvedValue(compare)
+    vi.spyOn(apiMod.api, 'macro').mockResolvedValue({ ref_date: '2026-08-21', indicators: {} })
+    const byDate = vi.spyOn(apiMod.api, 'byDate').mockResolvedValue(custom)
+    render(<QueryClientProvider client={makeClient()}><App /></QueryClientProvider>)
+    await waitFor(() => expect(screen.getByTestId('curve-chart')).toBeTruthy())
+    expect(document.querySelector('[data-testid="ref-line-custom"]')).toBeNull()
+    fireEvent.change(screen.getByLabelText(/Comparar com/i), { target: { value: '2025-10-01' } })
+    await waitFor(() => expect(document.querySelector('[data-testid="ref-line-custom"]')).toBeTruthy())
+    expect(byDate).toHaveBeenCalledWith('2025-10-01')
+    expect(screen.getByTestId('ref-legend-custom').textContent).toContain('2025-10-01')
+  })
 })

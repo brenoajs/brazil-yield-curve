@@ -42,6 +42,7 @@ export interface ChartReference {
 const REF_STYLE: Record<string, { stroke: string; dash: string; swatch: string }> = {
   week: { stroke: '#a3a3a3', dash: '5 4', swatch: 'legend-dash' },
   month: { stroke: '#737373', dash: '2 3', swatch: 'legend-dots' },
+  custom: { stroke: '#7c3aed', dash: '8 3', swatch: 'legend-custom' },
 }
 const refStyle = (key: string) => REF_STYLE[key] ?? REF_STYLE.week
 
@@ -50,10 +51,18 @@ export default function CurveChart({
   curve,
   references,
   onToggleReference,
+  customInput,
+  customMax,
+  customMin,
+  onCustomInputChange,
 }: {
   curve: Curve
   references: ChartReference[]
   onToggleReference: (key: string, value: boolean) => void
+  customInput: string
+  customMax: string
+  customMin: string
+  onCustomInputChange: (raw: string) => void
 }) {
   const points = curve.points
   // Cada referência só entra no domínio quando o toggle está ligado e os dados chegaram.
@@ -147,7 +156,7 @@ export default function CurveChart({
               </span>
             ))}
           </div>
-          {references.map((r) => (
+          {references.filter((r) => r.key !== 'custom').map((r) => (
             <label
               key={r.key}
               className="toggle-field"
@@ -169,6 +178,20 @@ export default function CurveChart({
               <span>{r.label}</span>
             </label>
           ))}
+          {(() => {
+            const customRef = references.find((r) => r.key === 'custom')
+            if (!customRef) return null
+            return (
+              <label
+                className="toggle-field"
+                title={customRef?.date ? `Compara com o pregão de ${customRef.date}` : 'Escolha uma data para comparar'}
+              >
+                <input type="checkbox" checked={!!customRef?.enabled && !!customRef?.date} disabled={!customRef?.date} onChange={(e) => onToggleReference('custom', e.target.checked)} aria-label="Data específica" />
+                <span>Data específica</span>
+                <input type="date" aria-label="Comparar com" value={customInput} min={customMin} max={customMax} onChange={(e) => onCustomInputChange(e.target.value)} />
+              </label>
+            )
+          })()}
         </div>
       </div>
       <div className="chart-wrap">

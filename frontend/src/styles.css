@@ -266,6 +266,11 @@ body {
   height: 0;
   border-top: 2px dotted var(--color-fog);
 }
+.legend-custom {
+  width: 14px;
+  height: 0;
+  border-top: 1.75px dashed #7c3aed;
+}
 .toggle-field {
   display: flex;
   align-items: center;
