@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef, useState } from 'react'
 import { Curve } from './api'
 import { PCT } from './format'
 
@@ -21,8 +22,9 @@ function shortLabel(ticker: string): string {
   return month ? `${month}/${m[2]}` : ticker
 }
 
-// Largura aproximada do rótulo em px (Geist Mono 11px ≈ 0.62em por caractere).
-const labelWidth = (text: string) => text.length * 6.8
+// Largura aproximada do rótulo em px (Geist Mono 11px ≈ 0.64em por caractere,
+// com margem — subestimar aqui empilha "out/26 set/27" no eixo).
+const labelWidth = (text: string) => text.length * 7.0
 
 const ms = (iso: string) => new Date(iso).getTime()
 
@@ -65,6 +67,24 @@ export default function CurveChart({
   onCustomInputChange: (raw: string) => void
 }) {
   const points = curve.points
+  // O SVG usa viewBox fixo (900u) mas renderiza na largura do card: no mobile
+  // a mesma cena encolhe e os rótulos HTML (fonte fixa) passariam a colidir.
+  // Mede a largura real e converte tudo para unidades do viewBox (metade do
+  // rótulo E a folga escalam); sem ResizeObserver (ex.: jsdom) cai para
+  // escala 1, o comportamento anterior. Layout effect para não piscar rótulos.
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const [wrapW, setWrapW] = useState(W)
+  useLayoutEffect(() => {
+    const el = wrapRef.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width
+      if (w && w > 0) setWrapW(w)
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+  const unitScale = W / (wrapW || W)
   // Cada referência só entra no domínio quando o toggle está ligado e os dados chegaram.
   const active = references.filter((r) => r.enabled && r.curve)
   const activeXs = active.flatMap((r) => r.curve!.points.map((p) => ms(p.maturity_date)))
@@ -94,9 +114,10 @@ export default function CurveChart({
     const x = +sx(xs[i]).toFixed(1)
     const y = +sy(ys[i]).toFixed(1)
     const label = shortLabel(p.vertex_label)
-    const halfW = labelWidth(label) / 2
+    // halfW em unidades do viewBox: a largura estimada é em px renderizados.
+    const halfW = (labelWidth(label) / 2) * unitScale
     // anti-colisão: só rotula se o rótulo inteiro cabe desde a borda do anterior
-    const showLabel = i === points.length - 1 || x - halfW > lastRight + 6
+    const showLabel = i === points.length - 1 || x - halfW > lastRight + 8 * unitScale
     if (showLabel) lastRight = x + halfW
     const deltas = refMaps.flatMap(({ ref, map }) => {
       const refRate = map.get(p.vertex_label)
@@ -194,7 +215,7 @@ export default function CurveChart({
           })()}
         </div>
       </div>
-      <div className="chart-wrap">
+      <div className="chart-wrap" ref={wrapRef}>
         <svg
           className="chart-svg"
           viewBox={`0 0 ${W} ${H}`}

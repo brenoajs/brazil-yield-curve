@@ -167,6 +167,7 @@ body {
   transition: background-color 150ms ease;
 }
 .btn-dark:hover { background: var(--color-charcoal); }
+.btn-dark:focus-visible { outline: 2px solid var(--color-electric-blue); outline-offset: 2px; }
 
 /* ---------- Page / hero ---------- */
 .page { max-width: 1200px; margin: 0 auto; padding: 48px 32px 80px; }
@@ -372,6 +373,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
   padding: 16px 20px;
   border-bottom: 1px solid var(--color-ash);
 }
@@ -461,7 +464,15 @@ body {
   padding: 8px 12px;
   border-radius: 8px;
   margin-bottom: 16px;
-  font-size: 0.9rem;
+  font-size: 13px;
+}
+/* Rótulo da base custom sobre os cards — mesma língua do hero-kicker. */
+.base-label {
+  font-family: var(--font-geist-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-fog);
 }
 .error-box, .empty-box {
   max-width: 480px;
@@ -488,6 +499,10 @@ body {
   font-weight: 500;
   cursor: pointer;
 }
+.error-box button:focus-visible, .empty-box button:focus-visible {
+  outline: 2px solid var(--color-electric-blue);
+  outline-offset: 2px;
+}
 .error-box { border: 1px solid var(--color-rose-border); background: var(--color-rose-bg); }
 .empty-box { border: 1px solid var(--color-ash); background: var(--color-paper-mist); }
 .skeleton { max-width: 1200px; margin: 0 auto; padding: 48px 32px; }
@@ -508,7 +523,11 @@ body {
 
 /* ---------- Responsivo ---------- */
 @media (max-width: 900px) {
-  .site-header { padding: 0 16px; }
+  /* Altura fixa de 60px transbordava com os controles empilhados: o header
+     passa a ter altura automática (continua sticky). */
+  .site-header { height: auto; min-height: 60px; flex-wrap: wrap; row-gap: 8px; padding: 8px 16px; }
+  .brand-name { white-space: nowrap; }
+  .header-controls { row-gap: 8px; }
   .brand-sub, .brand-divider { display: none; }
   .page { padding: 32px 16px 64px; }
   .hero-title { font-size: 30px; }

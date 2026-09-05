@@ -3,6 +3,10 @@ import { PCT, PB } from './format'
 
 // previous_rate/delta_pb vêm nulos quando o vértice não existia no pregão anterior.
 // Nesse caso a célula fica em "—": um 0,000% escrito seria lido como taxa medida.
+// Cor pelo sinal — mesmo contrato do Hero, da tabela e do rodapé
+// ("alta de taxa em laranja, queda em verde"): um max_up negativo pintado de
+// laranja afirmaria uma alta que não aconteceu.
+const signCls = (v: number | null | undefined) => (v == null || v === 0 ? '' : v > 0 ? 'up' : 'down')
 const deltaText = (d: CompareDelta) => (d.delta_pb == null ? '—' : PB(d.delta_pb))
 const moveText = (d: CompareDelta) =>
   d.previous_rate == null ? `sem vértice no pregão anterior · ${PCT(d.rate)}` : `${PCT(d.previous_rate)} → ${PCT(d.rate)}`
@@ -14,11 +18,11 @@ export default function Panels({ compare, baseLabel }: { compare?: Compare; base
 
   return (
     <div className="side-cards" data-testid="panels">
-      {baseLabel && <span className="mono" style={{ fontSize: 12 }}>{baseLabel}</span>}
+      {baseLabel && <span className="base-label">{baseLabel}</span>}
       <section className="delta-card">
         <div className="delta-card-head">
           <span className="delta-card-title">Maior alta</span>
-          <span className="delta-card-value up">{max_up ? deltaText(max_up) : '—'}</span>
+          <span className={`delta-card-value ${signCls(max_up?.delta_pb)}`}>{max_up ? deltaText(max_up) : '—'}</span>
         </div>
         {max_up ? (
           <>
@@ -34,7 +38,7 @@ export default function Panels({ compare, baseLabel }: { compare?: Compare; base
       <section className="delta-card">
         <div className="delta-card-head">
           <span className="delta-card-title">Maior queda</span>
-          <span className="delta-card-value down">{max_down ? deltaText(max_down) : '—'}</span>
+          <span className={`delta-card-value ${signCls(max_down?.delta_pb)}`}>{max_down ? deltaText(max_down) : '—'}</span>
         </div>
         {max_down ? (
           <>
