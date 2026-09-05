@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Curve } from './api'
 import { PCT } from './format'
 
@@ -47,6 +47,35 @@ const REF_STYLE: Record<string, { stroke: string; dash: string; swatch: string }
   custom: { stroke: '#7c3aed', dash: '8 3', swatch: 'legend-custom' },
 }
 const refStyle = (key: string) => REF_STYLE[key] ?? REF_STYLE.week
+
+// Toggle "Data específica": fluxo invertido — o checkbox nasce habilitado e o
+// campo de data, apagado; marcar habilita o campo e entrega o foco para digitar.
+function CustomReferenceToggle({ reference, customInput, customMin, customMax, onToggleReference, onCustomInputChange }: {
+  reference: ChartReference
+  customInput: string
+  customMin: string
+  customMax: string
+  onToggleReference: (key: string, value: boolean) => void
+  onCustomInputChange: (raw: string) => void
+}) {
+  const dateRef = useRef<HTMLInputElement>(null)
+  const wasEnabled = useRef(reference.enabled)
+  useEffect(() => {
+    if (reference.enabled && !wasEnabled.current && !reference.date) dateRef.current?.focus()
+    wasEnabled.current = reference.enabled
+  }, [reference.enabled, reference.date])
+  const title = reference.date
+    ? `Compara com o pregão de ${reference.date}`
+    : reference.enabled ? 'Escolha uma data para comparar' : 'Ativar comparação com data específica'
+  return (
+    <label className="toggle-field" title={title}>
+      <input type="checkbox" checked={!!reference.enabled} onChange={(e) => onToggleReference('custom', e.target.checked)} aria-label="Data específica" />
+      <span>Data específica</span>
+      <input ref={dateRef} type="date" aria-label="Comparar com" value={customInput} min={customMin} max={customMax}
+        disabled={!reference.enabled} onChange={(e) => onCustomInputChange(e.target.value)} />
+    </label>
+  )
+}
 
 // Eixo x por vencimento (maturity_date), não por índice do vértice.
 export default function CurveChart({
@@ -203,14 +232,9 @@ export default function CurveChart({
             const customRef = references.find((r) => r.key === 'custom')
             if (!customRef) return null
             return (
-              <label
-                className="toggle-field"
-                title={customRef?.date ? `Compara com o pregão de ${customRef.date}` : 'Escolha uma data para comparar'}
-              >
-                <input type="checkbox" checked={!!customRef?.enabled && !!customRef?.date} disabled={!customRef?.date} onChange={(e) => onToggleReference('custom', e.target.checked)} aria-label="Data específica" />
-                <span>Data específica</span>
-                <input type="date" aria-label="Comparar com" value={customInput} min={customMin} max={customMax} onChange={(e) => onCustomInputChange(e.target.value)} />
-              </label>
+              <CustomReferenceToggle reference={customRef}
+                customInput={customInput} customMin={customMin} customMax={customMax}
+                onToggleReference={onToggleReference} onCustomInputChange={onCustomInputChange} />
             )
           })()}
         </div>

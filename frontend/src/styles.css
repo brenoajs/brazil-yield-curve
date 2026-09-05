@@ -301,11 +301,14 @@ body {
 }
 .toggle-field input:focus { outline: none; }
 .toggle-field input:focus-visible { outline: 2px solid var(--color-electric-blue); outline-offset: 2px; }
-.toggle-field:has(input:disabled) {
+.toggle-field:has(input[type='checkbox']:disabled) {
   cursor: not-allowed;
   opacity: 0.5;
 }
-.toggle-field:has(input:disabled) input { cursor: not-allowed; }
+.toggle-field:has(input[type='checkbox']:disabled) input { cursor: not-allowed; }
+/* No pill custom o checkbox nunca desabilita — só o campo de data nasce
+   apagado (habilita ao marcar o checkbox). */
+.toggle-field input[type='date']:disabled { opacity: 0.45; cursor: not-allowed; }
 .chart-wrap { position: relative; }
 .chart-svg { width: 100%; display: block; overflow: visible; }
 .chart-overlay {
