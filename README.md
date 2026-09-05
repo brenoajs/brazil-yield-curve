@@ -1,239 +1,218 @@
 # Brazil Yield Curve
 
-Página de análise da curva de juros brasileira (DI futuro — DI1/B3).
+Aplicação para visualização, monitoramento e análise da curva de juros brasileira (DI futuro — DI1/B3) e dos principais indicadores macroeconômicos (Banco Central do Brasil / SGS).
 
-- **Backend**: FastAPI + SQLAlchemy (SQLite) — convenções base 252 dias úteis, capitalização exponencial `(1+y)^t`, variações em pb, interpolação linear marcada como `interpolated` (sem extrapolação).
-- **Frontend**: React 18 + TypeScript + Vite + TanStack Query — gráfico em SVG próprio (`src/CurveChart.tsx`, sem dependência de biblioteca de charts em runtime) com **eixo por vencimento** (`maturity_date` por ponto), tooltip com vencimento/liquidez e toggle **"Semana anterior"**, que sobrepõe a curva do pregão mais recente com 7+ dias corridos de defasagem.
-- **Segurança da ingestão**: o parser do SPRD trata ZIP aninhado, que é o formato de uma zip bomb, então cada membro tem teto de tamanho verificado antes de descomprimir e o download é limitado por streaming; o XML passa por `defusedxml` (expansão de entidade recusada).
-- **Fontes de dados**: adaptadores em `backend/sources/` — `official` (B3 SPRD para a curva DI e BCB SGS para macro; **requer internet**) e `mock` (dados sintéticos tipados, roda 100% offline).
-
-## Bloqueios corrigidos preservados
-
-1. `curve_type` inválido no CSV/API → **HTTP 400** com envelope `{"error": "invalid_curve_type", "allowed": [...]}`.
-2. Cada ponto carrega `maturity_date` + `liquidity_note`; tooltip e eixo x do gráfico usam o vencimento real.
-3. Cards "maior alta"/"maior queda" alimentados por **deltas reais em pb contra o pregão anterior** (`/api/v1/curves/compare`).
+- **Backend**: FastAPI + SQLAlchemy (SQLite) — convenções de mercado base 252 dias úteis, capitalização exponencial $(1+y)^t$, variações em pontos-base (pb) e interpolação linear identificada como `interpolated` (sem extrapolação).
+- **Frontend**: React 18 + TypeScript + Vite + TanStack Query — gráfico em SVG nativo (`src/CurveChart.tsx`, sem dependência de bibliotecas pesadas de charts em runtime) com **eixo por data de vencimento** (`maturity_date` por ponto), tooltip interativo com liquidez e comparações sobrepostas: **semana anterior**, **mês anterior** e **data específica** (linha violeta, com snap para o pregão anterior quando o dia escolhido cai em fim de semana/feriado).
+- **Navegação entre pregões**: calendário com botões ◀ ▶ e atalho "Último pregão"; turma, tabela e cards acompanham a data selecionada.
+- **Segurança da Ingestão**: O parser do arquivo SPRD (B3) trata estruturas de ZIP aninhado com verificação prévia de limites de tamanho antes da descompressão e download via streaming; o processamento de XML utiliza `defusedxml` para proteção contra ataques de expansão de entidades.
+- **Fontes de Dados**: Adaptadores modulares em `backend/sources/` — `official` (coleta direta do SPRD da B3 para a curva DI e do SGS/BCB para séries macroeconômicas) e `mock` (gerador determinístico de dados sintéticos para desenvolvimento e testes 100% offline).
 
 ---
 
-## Rodar localmente no Windows
+## Recursos e Validações
+
+1. Validação de `curve_type` no CSV/API com resposta estruturada **HTTP 400** (`{"error": "invalid_curve_type", "allowed": [...]}`).
+2. Cada vértice carrega `maturity_date` real e `liquidity_note`, refletidos na tabela, no tooltip e no eixo horizontal do gráfico.
+3. Cards de "Maior alta" e "Maior queda" calculados via deltas reais em pontos-base contra o pregão anterior (`/api/v1/curves/compare`).
+4. Comparação com data arbitrária: join client-side por `vertex_label` (`src/customCompare.ts`, mesma regra do `/curves/compare`), com alternância **vs anterior / vs data** na tabela e nos cards.
+5. Persistência idempotente: re-ingestão da mesma data substitui registros anteriores sem duplicação de dados.
+
+---
+
+## Como Rodar Localmente
 
 ### Pré-requisitos
 
-| Ferramenta | Versão | Instalação |
+| Ferramenta | Versão Recomendada | Instalação |
 |---|---|---|
-| Python | 3.11–3.13 (validado em 3.11.15 e 3.13.1) | [python.org](https://www.python.org/downloads/windows/) ou `winget install Python.Python.3.11` |
-| uv | qualquer | `winget install astral-sh.uv` (opcional, mas recomendado) |
-| Node.js | 20+ | `winget install OpenJS.NodeJS.LTS` |
+| Python | 3.11 a 3.13 | [python.org](https://www.python.org/downloads/) ou `winget install Python.Python.3.11` |
+| uv | Mais recente | [astral.sh/uv](https://astral.sh/uv) (opcional, recomendado para gerenciar ambientes virtuais) |
+| Node.js | 20+ LTS | [nodejs.org](https://nodejs.org/) ou `winget install OpenJS.NodeJS.LTS` |
 
-Todos os comandos abaixo são para **PowerShell**, a partir da raiz do repositório.
+---
 
-> **Windows PowerShell 5.1 não aceita `&&`.** Rode cada linha separadamente ou use `;` para encadear.
+### 1. Configuração do Backend
 
-Verificação rápida:
-
-```powershell
-python --version
-node --version
-uv --version
-```
-
-Se `python` abrir a Microsoft Store em vez de rodar, use `py -3` no lugar de `python` em todos os comandos, ou desative os App Execution Aliases em *Configurações → Aplicativos → Apelidos de execução de aplicativo*.
-
-### 1. Backend
+#### No Windows (PowerShell):
 
 ```powershell
 cd backend
-uv venv .venv
-uv pip install --python .venv\Scripts\python.exe -r requirements.txt
+
+# Criar ambiente virtual e instalar dependências
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+
+# Popular o banco de dados inicial (SQLite local)
+# Use --source official (requer internet) ou --source mock (offline)
+.\.venv\Scripts\python.exe seed.py --days 10 --source official
+
+# Iniciar o servidor da API
+.\.venv\Scripts\python.exe -m uvicorn api_main:app --host 127.0.0.1 --port 8021
 ```
 
-Atenção: `uv venv` pode escolher um Python **gerenciado pelo próprio uv** (ex.: 3.11) mesmo que o `python` do PATH seja mais novo. Para fixar o interpretador, use `uv venv .venv --python 3.13`.
+> Windows PowerShell 5.1 não aceita `&&`: rode cada linha separadamente ou use `;` para encadear. Se `python` abrir a Microsoft Store em vez de rodar, use `py -3` no lugar ou desative os App Execution Aliases em *Configurações → Aplicativos → Apelidos de execução de aplicativo*.
 
-Sem `uv`, use a stdlib:
+#### No Linux / macOS (Bash):
 
-```powershell
+```bash
 cd backend
-py -3 -m venv .venv
-.venv\Scripts\python.exe -m pip install -r requirements.txt
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+# Popular o banco de dados inicial
+python seed.py --days 10 --source official
+
+# Iniciar o servidor
+python -m uvicorn api_main:app --host 127.0.0.1 --port 8021
 ```
 
-O banco `backend/byc.db` **não é versionado**, então popule o histórico antes do primeiro start:
+> Sem a flag `--source`, a fonte vem da variável `BYC_SOURCE` e, na ausência dela, o padrão é `official`. Com `--source mock`, os dados são sintéticos (mesmos códigos de série do SGS) — servem para desenvolver sem rede, mas não têm significado econômico. O banco `backend/byc.db` não é versionado: popule o histórico antes do primeiro start.
+
+> A API escuta em `http://127.0.0.1:8021`. Confira o status em `http://127.0.0.1:8021/api/v1/health` ou a documentação interativa OpenAPI/Swagger em `http://127.0.0.1:8021/docs`.
+
+---
+
+### 2. Configuração do Frontend
+
+O frontend **não fala com o backend em runtime**: ele consome a API como arquivos estáticos em `frontend/public/api/v1/`, gerados pelo backend. Antes do primeiro `npm run dev`, exporte o snapshot (a partir de `backend/`):
+
+#### Gerar o Snapshot da API para o Frontend:
 
 ```powershell
-.venv\Scripts\python.exe seed.py --days 10 --source official
+# Windows
+cd backend
+.\.venv\Scripts\python.exe export_static.py --out ..\frontend\public
 ```
 
-Isso baixa dados reais da B3 (curva DI) e do BCB SGS (macro) — **precisa de internet**. Sem a flag, a fonte vem da variável `BYC_SOURCE` e, na ausência dela, o default já é `official`.
-
-Para trabalhar offline, `--source mock` gera dados sintéticos com os mesmos códigos de série do SGS. Serve para desenvolver sem rede; os números não têm significado econômico.
-
-Suba a API:
-
-```powershell
-.venv\Scripts\python.exe -m uvicorn api_main:app --host 127.0.0.1 --port 8021
+```bash
+# Linux/macOS
+cd backend
+python export_static.py --out ../frontend/public
 ```
 
-O backend escuta **apenas em 127.0.0.1**. Confira em <http://127.0.0.1:8021/api/v1/health> (deve retornar `{"status":"ok"}`) ou nos docs interativos em <http://127.0.0.1:8021/docs>.
+#### Executar o Frontend em Modo de Desenvolvimento:
 
-### 2. Frontend
-
-Em **outro terminal PowerShell**, a partir da raiz do repositório:
-
-```powershell
+```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-Vite sobe em <http://127.0.0.1:5173>.
+O Vite disponibilizará a aplicação em `http://127.0.0.1:5173`.
 
-O frontend **não fala com o backend em runtime**: ele consome a API como arquivos
-estáticos em `frontend/public/api/v1/`, gerados pelo backend. Antes do primeiro
-`npm run dev`, exporte o snapshot (a partir de `backend/`):
+---
+
+## Testes e Qualidade de Código
+
+### Testes do Backend (Pytest)
+
+A partir do diretório `backend/`:
 
 ```powershell
-.venv\Scripts\python.exe export_static.py --out ..\frontend\public
+# Executar testes unitários e de integração (offline por padrão)
+.\.venv\Scripts\python.exe -m pytest
+
+# Para incluir testes que dependem de conexão com a rede (B3/BCB):
+.\.venv\Scripts\python.exe -m pytest -m network
 ```
 
-Repita esse comando sempre que reindexar dados. `frontend/public/api/` não é versionado.
+### Testes e Validação do Frontend
 
-O servidor FastAPI continua útil para inspecionar a API ao vivo em <http://127.0.0.1:8021/docs>,
-mas não é necessário para rodar o frontend.
+A partir do diretório `frontend/`:
 
-Build de produção:
-
-```powershell
-npm run build      # saída em dist/, com base /brazil-yield-curve/
-npm run preview    # serve dist/ em 127.0.0.1:5173
-```
-
-### Encerrar
-
-`Ctrl+C` em cada terminal. Se alguma porta ficar presa:
-
-```powershell
-Get-NetTCPConnection -LocalPort 8021,5173 -State Listen | Select-Object LocalPort,OwningProcess
-Stop-Process -Id <PID> -Force
+```bash
+npm test            # Executa a suíte de testes com Vitest
+npx tsc --noEmit    # Verificação de tipagem estática TypeScript
+npm run lint        # Verificação com ESLint
+npm run build       # Build de produção
 ```
 
 ---
 
-## Testes
+## Referência da API REST (`/api/v1`)
 
-**Backend** (a partir de `backend/`):
-
-```powershell
-.venv\Scripts\python.exe -m pytest
-```
-
-`pytest.ini` já aplica `-m "not network"`, então os testes que batem na B3/BCB de verdade ficam de fora por padrão. Para incluí-los (precisa de internet):
-
-```powershell
-.venv\Scripts\python.exe -m pytest -m network
-```
-
-**Frontend** (a partir de `frontend/`):
-
-```powershell
-npm test
-npx tsc --noEmit
-npm run lint
-npm run build
-```
-
-Estado verificado nesta máquina (Windows 11, Node 22.13.0), em 2026-08-26:
-
-- backend: 31 passed / 1 deselected — em Python 3.11.15 (`uv venv`) **e** 3.13.1 (`py -3 -m venv`)
-- frontend: 9 passed, `tsc --noEmit` limpo, `npm run lint` limpo, build ok
-- boot ponta a ponta: `/api/v1/health` responde `ok` em `:8021`, e o frontend em `:5173` lê o snapshot estático de `frontend/public/api/v1/`
-
----
-
-## API (/api/v1)
-
-| Endpoint | Descrição |
-|---|---|
-| `GET /health` | liveness (rota completa: `/api/v1/health`) |
-| `GET /curves/latest?curve_type=DI_FUTURE` | último pregão |
-| `GET /curves/dates` | datas disponíveis (desc) |
-| `GET /curves/{date}` | curva por data |
-| `GET /curves/compare?trade_date=` | deltas pb vs pregão anterior + maior alta/queda |
-| `GET /macro` | IPCA 12m, Selic, PTAX, Selic alvo (BCB SGS) |
-| `GET /export/curve.csv?trade_date=` | CSV com decimal BR |
-
-`curve_type` válidos: `DI_FUTURE`, `NOMINAL`, `REAL`, `IMPLICIT` (MVP só popula DI_FUTURE).
-
----
-
-## Scripts auxiliares
-
-| Script | Plataforma | O que faz |
+| Endpoint | Método | Descrição |
 |---|---|---|
-| `backend/seed.py` | qualquer | popula N pregões úteis no SQLite |
-| `backend/export_static.py` | qualquer | congela a API em arquivos estáticos para o Pages |
-| `scripts/dev.sh` | **Linux/macOS apenas** | sobe backend + frontend juntos |
-| `scripts/ingest_daily.sh` | **Linux apenas** | ingestão diária da fonte oficial (systemd timer / cron) |
+| `/health` | `GET` | Verificação de disponibilidade do serviço |
+| `/curves/latest?curve_type=DI_FUTURE` | `GET` | Dados do pregão mais recente |
+| `/curves/dates` | `GET` | Lista de datas disponíveis no histórico (ordem decrescente) |
+| `/curves/{date}` | `GET` | Curva completa para a data especificada (`YYYY-MM-DD`) |
+| `/curves/compare?trade_date=` | `GET` | Variações em pontos-base vs. pregão anterior, maior alta e maior queda |
+| `/macro` | `GET` | Indicadores macroeconômicos (Selic Meta, Selic Efetiva, IPCA 12m, PTAX) |
+| `/export/curve.csv?trade_date=` | `GET` | Exportação da curva em formato CSV com formatação numérica brasileira |
 
-Os dois `.sh` assumem `.venv/bin/python`, caminho que não existe em venv de Windows (lá é `.venv\Scripts\`), então **não funcionam nem sob Git Bash**. No Windows, use o fluxo de dois terminais descrito acima.
+Tipos de curva suportados: `DI_FUTURE`, `NOMINAL`, `REAL`, `IMPLICIT` (*padrão atual: `DI_FUTURE`*).
+
+> No GitHub Pages, as mesmas rotas existem como arquivos estáticos (`api/v1/curves/<TIPO>/<data>.json`, `compare/`, `dates.json`, `latest.json`, `macro.json` e CSVs em `api/v1/export/`), gerados por `export_static.py`.
 
 ---
 
-## Deploy automático no GitHub Pages
+## Scripts Auxiliares
 
-O site é publicado em <https://brenoajs.github.io/brazil-yield-curve/> por
-`.github/workflows/pages.yml`. Como o Pages só hospeda arquivos estáticos, o
-workflow **não sobe o FastAPI**: ele roda a ingestão, congela a API em JSON/CSV
-e publica esses arquivos junto com o bundle.
+| Script | Plataforma | Finalidade |
+|---|---|---|
+| `backend/seed.py` | Multiplataforma | Popula $N$ pregões no banco de dados SQLite local |
+| `backend/export_static.py` | Multiplataforma | Exporta todas as rotas da API para arquivos JSON/CSV estáticos |
+| `scripts/dev.sh` | Linux / macOS | Executa simultaneamente backend e frontend para desenvolvimento |
+| `scripts/ingest_daily.sh` | Linux | Script de ingestão diária para agendamento via Cron ou Systemd Timer |
 
-Etapas do job:
+> Os dois `.sh` assumem `.venv/bin/python`, caminho que não existe em venv de Windows (lá é `.venv\Scripts\`), então **não funcionam nem sob Git Bash**. No Windows, use o fluxo de dois terminais descrito acima.
 
-1. `seed.py --days 15 --source official` (3 tentativas, com 60s entre elas — se falhar, o job falha e o site anterior continua no ar)
-2. `export_static.py --out ../frontend/public` — grava `api/v1/curves/<TIPO>/<data>.json`, `compare/`, `dates.json`, `latest.json`, `macro.json` e os CSVs em `api/v1/export/`
-3. `npm ci && npm test && npm run build`
-4. `upload-pages-artifact` + `deploy-pages`
+---
 
-Gatilhos: push em `main`, `workflow_dispatch` (botão *Run workflow*) e cron
-`0 22 * * 1-5` (22:00 UTC ≈ 19:00 BRT, após o fechamento da B3).
+## Deploy Contínuo (GitHub Pages)
+
+O site é publicado em <https://brenoajs.github.io/brazil-yield-curve/> por `.github/workflows/pages.yml`. Como o Pages só hospeda arquivos estáticos, o workflow **não sobe o FastAPI**: ele roda a ingestão, congela a API em JSON/CSV e publica esses arquivos junto com o bundle.
+
+Etapas do job (`build`):
+
+1. **Restaura o histórico**: busca `byc.db` da branch dedicada (`data`); se ela ainda não existir, faz carga inicial maior (`--days 60`, senão `--days 5`).
+2. **Ingestão oficial**: `seed.py --source official` (3 tentativas, com 60s entre elas — se falhar, o job falha e o site anterior continua no ar).
+3. **Exportação estática**: `export_static.py --out ../frontend/public`.
+4. **Persiste o banco**: força o push do `byc.db` atualizado para a branch `data`.
+5. `npm ci && npm test && npm run build`, depois `upload-pages-artifact` + `deploy-pages`.
+
+Gatilhos: push em `main`, `workflow_dispatch` (botão *Run workflow*) e cron `0 22 * * 1-5` (22:00 UTC ≈ 19:00 BRT, após o fechamento da B3).
 
 ### Habilitação (passo manual, uma vez)
 
-Em **Settings → Pages → Build and deployment → Source**, escolha **GitHub Actions**.
-Sem isso o workflow roda e o deploy fica parado sem erro óbvio.
+Em **Settings → Pages → Build and deployment → Source**, escolha **GitHub Actions**. Sem isso o workflow roda e o deploy fica parado sem erro óbvio.
 
 ### Limitações conhecidas
 
-- O site fica **público** — é uma inversão deliberada da postura atual do projeto (backend em `127.0.0.1` + túnel SSH). Os dados são públicos (B3 e BCB), então não há vazamento, mas a decisão é sua.
-- O histórico é **reconstruído do zero a cada execução** (o runner é efêmero e `byc.db` não é versionado): sempre os últimos ~15 pregões. Para acumular meses, seria preciso persistir o banco (ex.: branch `data`).
+- O site fica **público** — os dados são públicos (B3 e BCB), então não há vazamento, mas a decisão é sua.
 - Cron do GitHub atrasa de 10 a 60 min no plano gratuito e é **desativado após 60 dias sem atividade no repositório**.
-- `base` do Vite está fixo em `/brazil-yield-curve/` (`frontend/vite.config.ts`). Domínio próprio ou repo `<user>.github.io` → troque para `/`.
+- `base` do Vite está fixo em `/brazil-yield-curve/` só para build (`frontend/vite.config.ts`). Domínio próprio ou repo `<user>.github.io` → troque para `/`.
 
 ---
 
-## Deploy na VPS (Linux)
+## Deploy em Servidor Próprio / VPS (Linux)
+
+Para hospedar a aplicação em servidor dedicado:
 
 ```bash
-cd ~/brazil-yield-curve/backend
-uv venv .venv
-uv pip install --python .venv/bin/python -r requirements.txt
-.venv/bin/python seed.py --days 10 --source official
-.venv/bin/python -m uvicorn api_main:app --host 127.0.0.1 --port 8021
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python seed.py --days 10 --source official
+python -m uvicorn api_main:app --host 127.0.0.1 --port 8021
 ```
 
-Frontend: `cd ~/brazil-yield-curve/frontend && npm install && npm run build`.
+No frontend:
 
-Ingestão diária: agende `scripts/ingest_daily.sh` via timer systemd ou cron.
+```bash
+cd frontend
+npm install
+npm run build
+```
 
-Como nada é exposto publicamente, acesse a partir do seu PC por túnel SSH. No PowerShell do Windows:
+A ingestão diária pode ser configurada agendando a execução periódica do script `scripts/ingest_daily.sh`. Como nada é exposto publicamente, acesse a partir do seu PC por túnel SSH (no PowerShell do Windows):
 
 ```powershell
 ssh -N -L 5173:127.0.0.1:5173 -L 8021:127.0.0.1:8021 usuario@SEU_VPS
 ```
 
 Depois abra <http://localhost:5173> no navegador.
-
----
-
-## Notas
-
-- `backend/requirements.txt` está pinado por faixa de versão. Validado em instalação limpa com Python 3.11.
-- Não versionados: `backend/.venv/`, `backend/*.db`, `frontend/node_modules/`, `frontend/dist/`.
