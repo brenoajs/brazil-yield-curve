@@ -40,7 +40,7 @@ describe('Header', () => {
     expect(onDateChange).toHaveBeenCalledWith('2026-08-23')
   })
 
-  it('◀ ▶ navegam um pregão por vez', () => {
+  it('chevrons navegam um pregão por vez', () => {
     const { onDateChange } = renderHeader('2026-08-25')
     fireEvent.click(screen.getByLabelText('Pregão anterior'))
     expect(onDateChange).toHaveBeenCalledWith('2026-08-24')
