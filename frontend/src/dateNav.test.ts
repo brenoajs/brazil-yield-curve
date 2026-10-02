@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { hasTradeDate, latestBefore, nextTradeDate, prevTradeDate, snapToTradeDate } from './dateNav'
+import { hasTradeDate, latestBefore, nextTradeDate, prevTradeDate, snapCustomDate, snapToTradeDate } from './dateNav'
 
 // dates em ordem decrescente, como vem de /curves/dates.
 const DATES = ['2026-08-26', '2026-08-25', '2026-08-24', '2026-08-21', '2026-08-20']
@@ -53,5 +53,21 @@ describe('latestBefore', () => {
   it('sem histórico suficiente retorna null', () => {
     expect(latestBefore(['2026-08-21', '2026-08-20'], '2026-08-21', 30)).toBeNull()
     expect(latestBefore([], '2026-08-21', 7)).toBeNull()
+  })
+})
+
+describe('snapCustomDate', () => {
+  it('data já em pregão anterior passa sem snap', () => {
+    expect(snapCustomDate(DATES, '2026-08-21', '2026-08-25')).toEqual({ date: '2026-08-21', snapped: false })
+  })
+  it('data ≥ pregão atual cai no pregão imediatamente anterior', () => {
+    expect(snapCustomDate(DATES, '2026-08-25', '2026-08-25')).toEqual({ date: '2026-08-24', snapped: true })
+    expect(snapCustomDate(DATES, '2026-09-30', '2026-08-25')).toEqual({ date: '2026-08-24', snapped: true })
+  })
+  it('fim de semana snapa para trás', () => {
+    expect(snapCustomDate(DATES, '2026-08-23', '2026-08-26')).toEqual({ date: '2026-08-21', snapped: true })
+  })
+  it('sem pregão anterior retorna null', () => {
+    expect(snapCustomDate(DATES, '2026-08-19', '2026-08-20')).toBeNull()
   })
 })

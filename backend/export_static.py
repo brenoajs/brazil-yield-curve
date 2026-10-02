@@ -32,6 +32,7 @@ def export(db_url: str, out_dir: Path) -> int:
     app = create_app(db_url)
     root = out_dir / "api" / "v1"
     written = 0
+    trade_dates: set[str] = set()
 
     with TestClient(app) as client:
         _write(root / "health.json", json.dumps(_get_json(client, "/api/v1/health")))
@@ -44,6 +45,7 @@ def export(db_url: str, out_dir: Path) -> int:
             base = root / "curves" / curve_type
             dates_payload = _get_json(client, f"/api/v1/curves/dates?curve_type={curve_type}")
             dates = dates_payload["dates"]
+            trade_dates.update(dates)
             _write(base / "dates.json", json.dumps(dates_payload))
             written += 1
             if not dates:
@@ -75,6 +77,17 @@ def export(db_url: str, out_dir: Path) -> int:
                 csv_date.raise_for_status()
                 _write(root / "export" / curve_type / f"{date}.csv", csv_date.text)
                 written += 3
+
+        # Macro por pregão: o front pede macro/{trade_date}.json para que os
+        # indicadores acompanhem o pregão selecionado (último ref_date <= pregão).
+        # Pregão anterior ao primeiro dado macro devolve 404: sem arquivo.
+        for date in sorted(trade_dates):
+            res = client.get(f"/api/v1/macro?ref_date={date}")
+            if res.status_code == 404:
+                continue
+            res.raise_for_status()
+            _write(root / "macro" / f"{date}.json", json.dumps(res.json()))
+            written += 1
 
     return written
 

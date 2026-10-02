@@ -1,55 +1,46 @@
 import { CompareDelta, Compare } from './api'
-import { PCT, PB } from './format'
+import { brDate, contractShort, deltaClass, PB, PCT } from './format'
 
-// previous_rate/delta_pb vêm nulos quando o vértice não existia no pregão anterior.
-// Nesse caso a célula fica em "—": um 0,000% escrito seria lido como taxa medida.
-// Cor pelo sinal — mesmo contrato do Hero, da tabela e do rodapé
-// ("alta de taxa em laranja, queda em verde"): um max_up negativo pintado de
-// laranja afirmaria uma alta que não aconteceu.
-const signCls = (v: number | null | undefined) => (v == null || v === 0 ? '' : v > 0 ? 'up' : 'down')
-const deltaText = (d: CompareDelta) => (d.delta_pb == null ? '—' : PB(d.delta_pb))
 const moveText = (d: CompareDelta) =>
-  d.previous_rate == null ? `sem vértice no pregão anterior · ${PCT(d.rate)}` : `${PCT(d.previous_rate)} → ${PCT(d.rate)}`
+  d.previous_rate == null ? `sem vértice na base · ${PCT(d.rate)}` : `${PCT(d.previous_rate)} → ${PCT(d.rate)}`
 
-// Cards "Maior alta / Maior queda" (alimentados por compare).
-export default function Panels({ compare, baseLabel }: { compare?: Compare; baseLabel?: string }) {
-  if (!compare) return null
-  const { max_up, max_down } = compare
+function Card({ title, d, onHover }: { title: string; d: CompareDelta | null; onHover: (t: string | null) => void }) {
+  return (
+    <section
+      className="delta-card"
+      onMouseEnter={() => d && onHover(d.vertex_label)}
+      onMouseLeave={() => onHover(null)}
+    >
+      <div className="delta-card-head">
+        <span className="delta-card-title">{title}</span>
+        <span className={`delta-card-value ${deltaClass(d?.delta_pb)}`}>{d ? PB(d.delta_pb) : '—'}</span>
+      </div>
+      {d ? (
+        <>
+          <div className="delta-card-name">
+            {contractShort(d.vertex_label)}
+            <span className="delta-card-ticker">{d.vertex_label}</span>
+          </div>
+          <div className="delta-card-move mono">{moveText(d)}</div>
+          <div className="delta-card-foot">Vencimento {brDate(d.maturity_date)}</div>
+        </>
+      ) : (
+        <div className="delta-card-move">sem base de comparação</div>
+      )}
+    </section>
+  )
+}
 
+// Cards "Maior alta / Maior queda" — seguem a base única da página.
+// Hover num card destaca o contrato no gráfico e na tabela.
+export default function Panels({
+  compare, baseLabel, onHover = () => {},
+}: { compare?: Compare; baseLabel?: string; onHover?: (ticker: string | null) => void }) {
   return (
     <div className="side-cards" data-testid="panels">
       {baseLabel && <span className="base-label">{baseLabel}</span>}
-      <section className="delta-card">
-        <div className="delta-card-head">
-          <span className="delta-card-title">Maior alta</span>
-          <span className={`delta-card-value ${signCls(max_up?.delta_pb)}`}>{max_up ? deltaText(max_up) : '—'}</span>
-        </div>
-        {max_up ? (
-          <>
-            <div className="delta-card-name">{max_up.vertex_label}</div>
-            <div className="delta-card-move mono">{moveText(max_up)}</div>
-            <div className="delta-card-foot">Vencimento {max_up.maturity_date}</div>
-          </>
-        ) : (
-          <div className="delta-card-move">sem dados</div>
-        )}
-      </section>
-
-      <section className="delta-card">
-        <div className="delta-card-head">
-          <span className="delta-card-title">Maior queda</span>
-          <span className={`delta-card-value ${signCls(max_down?.delta_pb)}`}>{max_down ? deltaText(max_down) : '—'}</span>
-        </div>
-        {max_down ? (
-          <>
-            <div className="delta-card-name">{max_down.vertex_label}</div>
-            <div className="delta-card-move mono">{moveText(max_down)}</div>
-            <div className="delta-card-foot">Vencimento {max_down.maturity_date}</div>
-          </>
-        ) : (
-          <div className="delta-card-move">sem dados</div>
-        )}
-      </section>
+      <Card title="Maior alta" d={compare?.max_up ?? null} onHover={onHover} />
+      <Card title="Maior queda" d={compare?.max_down ?? null} onHover={onHover} />
     </div>
   )
 }

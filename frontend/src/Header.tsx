@@ -1,17 +1,28 @@
 import { nextTradeDate, prevTradeDate } from './dateNav'
 
+const Chevron = ({ dir }: { dir: 'left' | 'right' }) => (
+  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5"
+    strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d={dir === 'left' ? 'M7.5 2.5L4 6l3.5 3.5' : 'M4.5 2.5L8 6 4.5 9.5'} />
+  </svg>
+)
+
 export default function Header({
   dates,
   selectedDate,
   onDateChange,
   onLatest,
   csvHref,
+  updating = false,
+  csvDisabled = false,
 }: {
   dates: string[]
   selectedDate?: string
   onDateChange: (rawDate: string) => void
   onLatest: () => void
   csvHref: string
+  updating?: boolean
+  csvDisabled?: boolean
 }) {
   // Sem selectedDate (ou lista vazia): mostra o último pregão.
   const current = selectedDate ?? dates[0] ?? ''
@@ -28,6 +39,12 @@ export default function Header({
         <span className="brand-sub">DI1 · futuro de juros</span>
       </div>
       <div className="header-controls">
+        {updating && (
+          <span className="updating" data-testid="updating" role="status">
+            <span className="updating-dot" />
+            Atualizando…
+          </span>
+        )}
         <div className="date-nav">
           <button
             type="button"
@@ -36,7 +53,7 @@ export default function Header({
             disabled={!prev}
             onClick={() => prev && onDateChange(prev)}
           >
-            ◀
+            <Chevron dir="left" />
           </button>
           <label className="date-field">
             <span>Pregão</span>
@@ -58,15 +75,19 @@ export default function Header({
             disabled={!next}
             onClick={() => next && onDateChange(next)}
           >
-            ▶
+            <Chevron dir="right" />
           </button>
         </div>
         <button type="button" className="btn-ghost" disabled={isLatest || dates.length === 0} onClick={onLatest}>
           Último pregão
         </button>
-        <a className="btn-dark" href={csvHref} download>
-          Exportar CSV
-        </a>
+        {csvDisabled ? (
+          <span className="btn-dark is-disabled" role="link" aria-disabled="true">Exportar CSV</span>
+        ) : (
+          <a className="btn-dark" href={csvHref} download>
+            Exportar CSV
+          </a>
+        )}
       </div>
     </header>
   )

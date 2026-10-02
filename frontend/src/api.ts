@@ -36,11 +36,12 @@ export interface Macro {
   indicators: Record<string, number>
 }
 
-export const MACRO_LABELS: Record<string, string> = {
-  '432': 'Selic meta (%)',
-  '1178': 'Selic efetiva (% a.a.)',
-  '13522': 'IPCA 12m (%)',
-  '1': 'USD/BRL (PTAX)',
+// Rótulo sem unidade + unidade em cinza ao lado (KpiStrip).
+export const MACRO_LABELS: Record<string, { label: string; unit: string }> = {
+  '432': { label: 'Selic meta', unit: '% a.a.' },
+  '1178': { label: 'Selic efetiva', unit: '% a.a.' },
+  '13522': { label: 'IPCA 12m', unit: '%' },
+  '1': { label: 'USD/BRL', unit: 'PTAX' },
 }
 
 export class ApiError extends Error {
@@ -81,7 +82,9 @@ export const api = {
     request<Curve>(`${curveBase(curveType)}/${date}.json`),
   compare: (date?: string, curveType: string = 'DI_FUTURE') =>
     request<Compare>(`${curveBase(curveType)}/compare/${date ?? 'latest'}.json`),
-  macro: () => request<Macro>(`${BASE}api/v1/macro.json`),
+  // Com data: último ref_date <= pregão (macro/{date}.json, gerado por export_static.py).
+  macro: (date?: string) =>
+    request<Macro>(date ? `${BASE}api/v1/macro/${date}.json` : `${BASE}api/v1/macro.json`),
   exportCsvUrl: (date?: string, curveType: string = 'DI_FUTURE') =>
     `${BASE}api/v1/export/${curveType}/${date ?? 'latest'}.csv`,
 }

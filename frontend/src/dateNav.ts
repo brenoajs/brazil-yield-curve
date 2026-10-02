@@ -39,3 +39,43 @@ export function nextTradeDate(dates: string[], current: string): string | null {
   if (i <= 0) return null
   return dates[i - 1]
 }
+
+// Data custom de comparação: sempre um pregão ESTRITAMENTE anterior ao atual.
+// Snap só para trás; datas ≥ pregão atual caem no pregão imediatamente anterior
+// (o `max` do input). null = não há pregão anterior para comparar.
+export function snapCustomDate(
+  dates: string[],
+  raw: string,
+  current: string,
+): { date: string; snapped: boolean } | null {
+  const max = prevTradeDate(dates, current)
+  if (!max) return null
+  if (raw >= current || raw > max) return { date: max, snapped: raw !== max }
+  return snapToTradeDate(dates, raw)
+}
+
+// Base única de comparação da página: chips, gráfico, cards e tabela.
+export type BaseKey = 'prev' | 'week' | 'month' | 'custom'
+
+export const BASE_NAMES: Record<BaseKey, string> = {
+  prev: 'pregão anterior',
+  week: '1 semana',
+  month: '1 mês',
+  custom: 'data escolhida',
+}
+
+// Data de cada base para o pregão `trade`; null = indisponível. Sempre extraída
+// da lista de pregões (nunca por aritmética de data), custom só se < pregão.
+export function resolveBaseDates(
+  dates: string[],
+  trade: string | null,
+  customDate: string,
+): Record<BaseKey, string | null> {
+  if (!trade) return { prev: null, week: null, month: null, custom: null }
+  return {
+    prev: prevTradeDate(dates, trade),
+    week: latestBefore(dates, trade, 7),
+    month: latestBefore(dates, trade, 30),
+    custom: customDate && customDate < trade ? customDate : null,
+  }
+}
